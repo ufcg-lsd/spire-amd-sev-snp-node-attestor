@@ -5,6 +5,7 @@ import (
 	"crypto/sha512"
 	"crypto/x509"
 	"encoding/pem"
+	"math/big"
 	"unsafe"
 )
 
@@ -12,14 +13,20 @@ const SIGNATURE_OFFSET = 672
 const SIGNATURE_LENGTH = int(unsafe.Sizeof(Signature{}))
 const REPORT_LENGTH = int(unsafe.Sizeof(AttestationReport{}))
 
+type ecdsaSignature struct {
+	R, S *big.Int
+}
+
 func ValidateGuestReportAgainstVCEK(report *[]byte, vcek *[]byte) bool {
 	pubKey := getECDSAPubKeyFromByteArray(vcek)
 
 	reportSplitted, signature := splitReportFromSignature(report)
 
+	parsedSignature := parseECDSASignature(signature)
+
 	digest := getReportDigest(reportSplitted)
 
-	valid := ecdsa.VerifyASN1(pubKey, digest[:], signature)
+	valid := ecdsa.Verify(pubKey, digest[:], parsedSignature.R, parsedSignature.S)
 
 	return valid
 }
@@ -36,11 +43,20 @@ func splitReportFromSignature(report *[]byte) ([]byte, []byte) {
 	reportWithoutSig := (*report)[:SIGNATURE_OFFSET]
 	sig := (*report)[SIGNATURE_OFFSET : REPORT_LENGTH-(SIGNATURE_LENGTH-144)]
 
-	// Must revert bytes because they are in a bigEndian
-	r := revertBytes(sig[:len(sig)/2])
-	s := revertBytes(sig[len(sig)/2:])
+	return reportWithoutSig, sig
+}
 
-	return reportWithoutSig, append(r, s...)
+func parseECDSASignature(sigBytes []byte) ecdsaSignature {
+	r := new(big.Int)
+	r.SetBytes(revertBytes(sigBytes[:len(sigBytes)/2]))
+
+	s := new(big.Int)
+	s.SetBytes(revertBytes(sigBytes[len(sigBytes)/2:]))
+
+	return ecdsaSignature{
+		R: r,
+		S: s,
+	}
 }
 
 func getReportDigest(report []byte) []byte {
