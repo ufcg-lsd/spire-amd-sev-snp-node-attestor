@@ -177,10 +177,7 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 		return err
 	}
 
-	file, _ = os.Open("guest_report.bin")
-	parsedReport := LoadAttestationReport(file)
-
-	p.logger.Debug(PrintByteArray(parsedReport.ReportData[:]))
+	parsedReport := LoadAttestationReport(report)
 
 	if parsedReport.ReportData != sha512Nonce {
 		return errors.New("invalid nonce received in report")
@@ -224,6 +221,17 @@ func AgentID(pluginName, trustDomain string, report AttestationReport) string {
 	}
 
 	return u.String()
+}
+
+func PrintByteArray(array []byte) string {
+	str := ""
+
+	for i := 0; i < len(array); i++ {
+		value := array[i]
+		str += fmt.Sprintf("%02x", value)
+	}
+
+	return str
 }
 
 func buildSelectorValues(report AttestationReport, vcek []byte) []string {
