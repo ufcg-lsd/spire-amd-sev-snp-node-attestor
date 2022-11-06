@@ -111,7 +111,7 @@ The **plugin_cmd** configs in the NodeAttestor **sev-snp** are not set in `~/con
 ```conf
 # agent.conf
 NodeAttestor "sev_snp" {
-        plugin_cmd = "/home/ubuntu/spire/dummy-plugin-agent"
+        plugin_cmd = "/home/ubuntu/spire/sev-snp-agent"
         plugin_checksum = ""
         plugin_data {
 	        vcek_path = "<path/to/vcek>"
@@ -128,7 +128,7 @@ The **plugin_cmd** configs in the NodeAttestor **sev-snp** are not set in `~/con
 ```conf
 # server.conf
 NodeAttestor "sev_snp" {
-    plugin_cmd = "/home/ubuntu/spire/dummy-plugin-server"
+    plugin_cmd = "/home/ubuntu/spire/sev-snp-server"
     plugin_checksum = ""
     plugin_data {
         amd_cert_chain = "<path/to/amd_certchain>"
