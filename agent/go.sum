@@ -67,6 +67,8 @@ github.com/oklog/run v1.0.0/go.mod h1:dlhp/R75TPv97u0XWUtDeV/lRKWPKSdTuV0TZvrmrQ
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
+github.com/rizzza/smart v0.0.0-20190505152634-909a45200d6d h1:bmDZI9GqCBxJdnEeu+SQE3G7rVN0ip3WbDlXEgqFdVk=
+github.com/rizzza/smart v0.0.0-20190505152634-909a45200d6d/go.mod h1:6SQBWT095uvGKyNviEP1flAgRqAIlgTTMtLZXqGsz/M=
 github.com/spiffe/spire-plugin-sdk v1.4.0 h1:aFMe5BiAgoTz718sXE/SChfU+U45z8q2zvCUcQns7PA=
 github.com/spiffe/spire-plugin-sdk v1.4.0/go.mod h1:fzNSP83Z848jZtPQYeZ9qPWZkbSPwmd/JFNux1gxsbM=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

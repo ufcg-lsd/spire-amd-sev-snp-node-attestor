@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/sha512"
 	"os"
 	"sync"
 	"unsafe"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/hcl"
 	"github.com/spiffe/spire-plugin-sdk/pluginmain"
@@ -32,8 +32,7 @@ var (
 // Config defines the configuration for the plugin.
 // TODO: Add relevant configurables or remove if no configuration is required.
 type Config struct {
-	SevGuestGetReportPath string `hcl:"sg_get_report_bin_path"`
-	VCEKPath              string `hcl:"vcek_path"`
+	VCEKPath string `hcl:"vcek_path"`
 }
 
 // Plugin implements the NodeAttestor plugin
@@ -98,26 +97,23 @@ func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestatio
 		},
 	})
 
-	challenge, _ := stream.Recv()
-	nonce := challenge.Challenge
+	challenge, err := stream.Recv()
+	if err != nil {
+		return err
+	}
 
-	nonceFileName := uuid.New().String() + ".txt"
-	os.WriteFile(nonceFileName, nonce, 0644)
+	nonce := sha512.Sum512(challenge.Challenge)
+	report, err := GetReport(nonce)
 
-	GetReport("report.bin", nonceFileName, config.SevGuestGetReportPath)
+	if err != nil {
+		return err
+	}
 
-	report, _ := os.ReadFile("report.bin")
-
-	stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
+	return stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
 		Data: &nodeattestorv1.PayloadOrChallengeResponse_ChallengeResponse{
 			ChallengeResponse: report,
 		},
 	})
-
-	os.Remove("report.bin")
-	os.Remove(nonceFileName)
-
-	return nil
 }
 
 // Configure configures the plugin. This is invoked by SPIRE when the plugin is
