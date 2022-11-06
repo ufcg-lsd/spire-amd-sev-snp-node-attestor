@@ -1,4 +1,4 @@
-module dummy-plugin-agent
+module sev-snp-agent
 
 go 1.18
 

@@ -1,4 +1,4 @@
-module dummy-plugin-server
+module sev-snp-server
 
 go 1.18
 

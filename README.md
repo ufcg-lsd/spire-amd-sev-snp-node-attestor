@@ -1,16 +1,22 @@
-# Dummy SPIRE Plugin
+# AMD SEV SNP SPIRE Plugin
 
-A dummy plugin for SPIRE Node Attestation for SPIRE Server and SPIRE Agent.
+A AMD SEV-SNP attestation pluggin for SPIRE Node Attestation for SPIRE Server and SPIRE Agent.
 
 ## 1. How it works.
 
-The Server Plugin is configured to expect a int16 number that must be `odd`, `even` or `any` (odd or even).
+The plugin consists in a attestation of a Agent, based in the guest report obtained by a ATTESTATION_REPORT command to the SEV-SNP firmware.
 
-The Agent Plugin is configured to send a random int16 number configured to be `even` or `odd`.
+First, the Agent send the chip VCEK to the Server so it can verify its authenticity using the AMD Root chain.
 
-If the Agent Plugin provides a number that matches the expected type from Server Plugin, it receives a SPIFFEID following the template:
+Once it is verified, the Server provides a Nonce to the Agent, that must be included in the attestation report.
 
-`spiffe://{{trust_domain}}/spire/agent/{{plugin_name}}/{{number_type}}/{{number_provided}}}`
+The Agent, requests to the AMD SEV-SNP firmware an attestation report and provides the Nonce sented by the Server to it; after get the report, the Agent send it to the Server.
+
+Now, the Server verifies that the report was signed by the private key of the VCEK, and verifies the Nonce included in the report. If it is everything valid, the Server provides the SPIFFEID to the Agent following the template:
+
+`spiffe://{{trust_domain}}/spire/agent/{{plugin_name}}/{{uuid}}/measurement/{{measurement}}/policy/{{policy}}`
+
+The infos about `measurement` and `policy` are included in the report 
 
 ## 2. Dependencies.
 
@@ -70,8 +76,8 @@ cd ~/
 Now let's clone the plugin repository.
 
 ```sh
-git clone https://git.lsd.ufcg.edu.br/securedsp/dummy-spire-plugin.git
-cd dummy-spire-plugin/
+git clone https://git.lsd.ufcg.edu.br/securedsp/amd-sev-snp-plugin.git
+cd amd-sev-snp-plugin/
 ```
 
 build the agent and the server plugin.
@@ -100,54 +106,37 @@ cd ~/
 
 ### 4.1 Spire Agent configuration file.
 
-The **plugin_cmd** configs in the NodeAttestor **dummy_plugin** are not set in `~/conf/agent/agent.conf`, you must replace the **plugin_cmd** with the path of the agent dummy plugin binary that you have builded. 
+The **plugin_cmd** configs in the NodeAttestor **sev-snp** are not set in `~/conf/agent/agent.conf`, you must replace the **plugin_cmd** with the path of the agent sev-snp plugin binary that you have builded. 
 
-```json
+```conf
 # agent.conf
- NodeAttestor "dummy_plugin" {
-        plugin_cmd = "path/to/dummy-plugin-agent"
+NodeAttestor "sev_snp" {
+        plugin_cmd = "/home/ubuntu/spire/dummy-plugin-agent"
         plugin_checksum = ""
         plugin_data {
-            number_type = "odd"
+	        vcek_path = "<path/to/vcek>"
         }
 }
 ```
 
-*if you followed the instructions, the path is `/home/$USER/dummy-plugin-agent`. (notice that you have to replace $USER with your username, env variables are not allowed in the config file)*
-
-Possible values to 
-`number_type` config in Agent plugin.
-
-| number_type | Description                                   |
-| ----------- | --------------------------------------------- |
-| odd         | makes the agent generate a random odd number  |
-| even        | makes the agent generate a random even number |
-
+*if you followed the instructions, the path is `/home/$USER/sev-snp-agent`. (notice that you have to replace $USER with your username, env variables are not allowed in the config file)*
 
 ### 4.2 Spire Server configuration file.
 
-The **plugin_cmd** configs in the NodeAttestor **dummy_plugin** are not set in `~/conf/server/server.conf`, you must replace the **plugin_cmd** with the path of the server dummy plugin binary that you have builded. 
+The **plugin_cmd** configs in the NodeAttestor **sev-snp** are not set in `~/conf/server/server.conf`, you must replace the **plugin_cmd** with the path of the server sev-snp plugin binary that you have builded. 
 
-```json
+```conf
 # server.conf
-NodeAttestor "dummy_plugin" {
-	    plugin_cmd = "path/to/dummy-plugin-server"
-	    plugin_checksum = ""
-	    plugin_data {
-	        valid_number_type = "odd"
-	    }
+NodeAttestor "sev_snp" {
+    plugin_cmd = "/home/ubuntu/spire/dummy-plugin-server"
+    plugin_checksum = ""
+    plugin_data {
+        amd_cert_chain = "<path/to/amd_certchain>"
+    }
 }
 ```
 
-*if you followed the instructions, the path is `/home/$USER/dummy-plugin-server`. (notice that you have to replace $USER with your username, env variables are not allowed in the config file)*
-
-Possible values to `valid_number_type` config in Server plugin.
-
-| valid_number_type | Description                                   |
-| ----------------- | --------------------------------------------- |
-| odd               | makes server attest just odd numbers          |
-| even              | makes server attest just even numbers         |
-| any               | makes server attest any number provided to it |
+*if you followed the instructions, the path is `/home/$USER/sev-snp-server`. (notice that you have to replace $USER with your username, env variables are not allowed in the config file)*
 
 ## 5. Running SPIRE with the plugin.
 
