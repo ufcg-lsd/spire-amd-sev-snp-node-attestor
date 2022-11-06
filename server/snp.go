@@ -46,9 +46,8 @@ const (
 // Config defines the configuration for the plugin.
 // TODO: Add relevant configurables or remove if no configuration is required.
 type Config struct {
-	trustDomain    spiffeid.TrustDomain
-	AMDCertChain   string `hcl:"amd_cert_chain"`
-	SevtoolBinPath string `hcl:"sevtool_bin_path"`
+	trustDomain  spiffeid.TrustDomain
+	AMDCertChain string `hcl:"amd_cert_chain"`
 }
 
 // Plugin implements the NodeAttestor plugin
@@ -149,7 +148,6 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 	vcek := req.GetPayload()
 
 	valid, err := validateVCEKCertChain(vcek, config.AMDCertChain)
-
 	if !valid {
 		return err
 	}
@@ -167,15 +165,13 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 
 	report := challengeRes.GetChallengeResponse()
 
-	file, _ := os.Create("guest_report.bin")
-	defer file.Close()
-	file.Write(report)
+	p.logger.Debug("CHEGOU O CHALLENGE RESPONSE")
 
-	err = ValidateGuestReport(file, config.SevtoolBinPath)
-
-	if err != nil {
-		return err
+	valid = ValidateGuestReport(&vcek, &report)
+	if !valid {
+		return errors.New("unable to validate guest report against vcek")
 	}
+	p.logger.Debug("PASSOU DO VALIDATE!")
 
 	parsedReport := LoadAttestationReport(report)
 
