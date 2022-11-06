@@ -45,19 +45,7 @@ type AttestationReport struct {
 	Signature       Signature
 }
 
-const POLICY_DEBUG_SHIFT = 19
-const POLICY_MIGRATE_MA_SHIFT = 18
-const POLICY_SMT_SHIFT = 16
-const POLICY_ABI_MAJOR_SHIFT = 8
-const POLICY_ABI_MINOR_SHIFT = 0
-
-const POLICY_DEBUG_MASK = (uint64(1) << (POLICY_DEBUG_SHIFT))
-const POLICY_MIGRATE_MA_MASK = (uint64(1) << (POLICY_MIGRATE_MA_SHIFT))
-const POLICY_SMT_MASK = (uint64(1) << (POLICY_SMT_SHIFT))
-const POLICY_ABI_MAJOR_MASK = (uint64(0xFF) << (POLICY_ABI_MAJOR_SHIFT))
-const POLICY_ABI_MINOR_MASK = (uint64(0xFF) << (POLICY_ABI_MINOR_SHIFT))
-
-func LoadAttestationReport(reportBin []byte) AttestationReport {
+func BuildAttestationReport(reportBin []byte) AttestationReport {
 	report := AttestationReport{}
 
 	binary.Read(bytes.NewBuffer(reportBin), binary.LittleEndian, &report)

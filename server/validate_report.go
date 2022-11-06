@@ -8,13 +8,13 @@ import (
 	"math/big"
 )
 
-func ValidateGuestReport(vcek *[]byte, report *[]byte) bool {
+func ValidateGuestReportAgainstVCEK(report *[]byte, vcek *[]byte) bool {
 	block, _ := pem.Decode([]byte(*vcek))
 	cert, _ := x509.ParseCertificate(block.Bytes)
 	pub := cert.PublicKey.(*ecdsa.PublicKey)
 
 	reportWithoutSig := (*report)[0:672]
-	sig := (*report)[672 : 1184-(512-144)]
+	sig := (*report)[672:816]
 
 	r := new(big.Int)
 	r.SetBytes(revertBytes(sig[:len(sig)/2]))

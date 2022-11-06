@@ -4,16 +4,12 @@ import (
 	"context"
 	"crypto/sha1"
 	"crypto/sha512"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net/url"
-	"os"
 	"path"
 	"sync"
-	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
@@ -84,53 +80,11 @@ func (p *Plugin) BrokerHostServices(broker pluginsdk.ServiceBroker) error {
 	return nil
 }
 
-func ByteArrayToInt(arr []byte) int16 {
-	val := int16(0)
-	size := len(arr)
-	for i := 0; i < size; i++ {
-		*(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&val)) + uintptr(i))) = arr[i]
-	}
-	return val
-}
-
 func generateNonce(length uint8) []byte {
 	nonce := make([]byte, length)
 	rand.Read(nonce)
 
 	return nonce
-}
-
-func validateVCEKCertChain(vcek []byte, rootPath string) (bool, error) {
-	rootPEM, err := os.ReadFile(rootPath)
-	if err != nil {
-		return false, err
-	}
-
-	roots := x509.NewCertPool()
-	ok := roots.AppendCertsFromPEM([]byte(rootPEM))
-	if !ok {
-		return false, err
-	}
-
-	block, _ := pem.Decode([]byte(vcek))
-	if block == nil {
-		return false, err
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return false, err
-	}
-
-	opts := x509.VerifyOptions{
-		Roots:         roots,
-		Intermediates: x509.NewCertPool(),
-	}
-
-	if _, err := cert.Verify(opts); err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 // Attest implements the NodeAttestor Attest RPC
@@ -147,13 +101,12 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 
 	vcek := req.GetPayload()
 
-	valid, err := validateVCEKCertChain(vcek, config.AMDCertChain)
+	valid, err := ValidateVCEKCertChain(vcek, config.AMDCertChain)
 	if !valid {
 		return err
 	}
 
 	nonce := generateNonce(uint8(16))
-	sha512Nonce := sha512.Sum512(nonce)
 
 	stream.Send(&nodeattestorv1.AttestResponse{
 		Response: &nodeattestorv1.AttestResponse_Challenge{
@@ -163,29 +116,25 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 
 	challengeRes, _ := stream.Recv()
 
-	report := challengeRes.GetChallengeResponse()
+	reportBytes := challengeRes.GetChallengeResponse()
 
-	p.logger.Debug("CHEGOU O CHALLENGE RESPONSE")
-
-	valid = ValidateGuestReport(&vcek, &report)
+	valid = ValidateGuestReportAgainstVCEK(&reportBytes, &vcek)
 	if !valid {
 		return errors.New("unable to validate guest report against vcek")
 	}
-	p.logger.Debug("PASSOU DO VALIDATE!")
 
-	parsedReport := LoadAttestationReport(report)
+	report := BuildAttestationReport(reportBytes)
 
-	if parsedReport.ReportData != sha512Nonce {
+	sha512Nonce := sha512.Sum512(nonce)
+	if report.ReportData != sha512Nonce {
 		return errors.New("invalid nonce received in report")
 	}
 
 	var spiffeID string
 	var selectors []string
 
-	spiffeID = AgentID(pluginName, config.trustDomain.String(), parsedReport)
-	selectors = buildSelectorValues(parsedReport, vcek)
-
-	os.Remove("guest_report.bin")
+	spiffeID = AgentID(pluginName, config.trustDomain.String(), report)
+	selectors = buildSelectorValues(report, vcek)
 
 	return stream.Send(&nodeattestorv1.AttestResponse{
 		Response: &nodeattestorv1.AttestResponse_AgentAttributes{
