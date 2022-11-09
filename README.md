@@ -84,6 +84,9 @@ build the agent and the server plugin.
 
 ```sh
 make build BUILD_PATH=<PATH_TO_BUILD>
+
+# It will generate a <PATH_TO_BUILD>/snp-agent and <PATH_TO_BUILD>/snp-server binaries, 
+# which is the agent and server plugin binary respectively
 ```
 
 ## 4. How to configure the Agent and Server files.
