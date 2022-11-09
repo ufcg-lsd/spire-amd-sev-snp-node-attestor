@@ -1,17 +1,17 @@
 package snp
 
 type TCBVersion struct {
-	BootLoader byte
-	TEE        byte
-	Reserved   [4]byte
-	SNP        byte
-	Microcode  byte
+	BootLoader byte    // 0x0
+	TEE        byte    // 0x1
+	Reserved   [4]byte // 0x2
+	SNP        byte    // 0x6
+	Microcode  byte    // 0x7
 }
 
 type Signature struct {
-	R        [72]byte
-	S        [72]byte
-	Reserved [512 - 144]byte
+	R        [72]byte        // 0x00
+	S        [72]byte        // 0x48
+	Reserved [512 - 144]byte // 0x90
 }
 
 /* The ATTESTATION_REPORT struct returned from the firmware */
