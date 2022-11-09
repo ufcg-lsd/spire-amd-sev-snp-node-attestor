@@ -1,18 +1,18 @@
 # AMD SEV SNP SPIRE Plugin
 
-A AMD SEV-SNP attestation pluggin for SPIRE Node Attestation for SPIRE Server and SPIRE Agent.
+An AMD SEV-SNP Node attestation plugin for SPIRE Server and SPIRE Agent.
 
 ## 1. How it works.
 
-The plugin consists in a attestation of a Agent, based in the guest report obtained by a ATTESTATION_REPORT command to the SEV-SNP firmware.
+The plugin consists of an attestation of an Agent, based in the guest report obtained by an ATTESTATION_REPORT command to the SEV-SNP firmware.
 
-First, the Agent send the chip VCEK to the Server so it can verify its authenticity using the AMD Root chain.
+First, the Agent sends the chip VCEK to the Server so it can verify its authenticity using the AMD Root chain.
 
 Once it is verified, the Server provides a Nonce to the Agent, that must be included in the attestation report.
 
-The Agent, requests to the AMD SEV-SNP firmware an attestation report and provides the Nonce sented by the Server to it; after get the report, the Agent send it to the Server.
+The Agent, requests to the AMD SEV-SNP firmware an attestation report and provides the Nonce sent by the Server to it; after obtaining the report, the Agent sends it to the Server.
 
-Now, the Server verifies that the report was signed by the private key of the VCEK, and verifies the Nonce included in the report. If it is everything valid, the Server provides the SPIFFEID to the Agent following the template:
+Then, the Server verifies that the report was signed by the private key of the VCEK, and verifies whether the Nonce included in the report is correct. If both verification succeeds, the Server provides the SPIFFE ID to the Agent following the template:
 
 `spiffe://{{trust_domain}}/spire/agent/{{plugin_name}}/{{uuid}}/measurement/{{measurement}}/policy/{{policy}}`
 
@@ -150,7 +150,7 @@ spire-server run -config conf/server/server.conf
 spire-agent run -config conf/agent/agent.conf
 ```
 
-Depends on your configuration, you must expect that the Agent has been successfully attested or not.
+Depending on your configuration, you must expect that the Agent has been successfully attested or not.
 
 ## 6. References
 
