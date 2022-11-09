@@ -1,4 +1,4 @@
-package main
+package snp
 
 import (
 	"crypto/ecdsa"
@@ -6,12 +6,13 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"math/big"
+	snp "snp/common"
 	"unsafe"
 )
 
 const SIGNATURE_OFFSET = 672
-const SIGNATURE_LENGTH = int(unsafe.Sizeof(Signature{}))
-const REPORT_LENGTH = int(unsafe.Sizeof(AttestationReport{}))
+const SIGNATURE_LENGTH = int(unsafe.Sizeof(snp.Signature{}))
+const REPORT_LENGTH = int(unsafe.Sizeof(snp.AttestationReport{}))
 
 type ecdsaSignature struct {
 	R, S *big.Int

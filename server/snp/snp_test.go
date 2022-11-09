@@ -1,13 +1,13 @@
-package main_test
+package snp_test
 
 import (
 	"testing"
 
 	"github.com/spiffe/spire-plugin-sdk/pluginsdk"
 	"github.com/spiffe/spire-plugin-sdk/plugintest"
-	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/nodeattestor/v1"
+	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
 	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
-	"github.com/spiffe/spire-plugin-sdk/templates/agent/nodeattestor"
+	"github.com/spiffe/spire-plugin-sdk/templates/server/nodeattestor"
 )
 
 func Test(t *testing.T) {

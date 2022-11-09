@@ -1,4 +1,4 @@
-package main
+package snp
 
 import (
 	"crypto/x509"

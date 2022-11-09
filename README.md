@@ -83,15 +83,7 @@ cd amd-sev-snp-plugin/
 build the agent and the server plugin.
 
 ```sh
-# Build the agent plugin
-cd agent/
-go build -o ~/
-cd ..
-
-# Build the server plugin
-cd server/
-go build -o ~/
-cd ..
+make build BUILD_PATH=<PATH_TO_BUILD>
 ```
 
 ## 4. How to configure the Agent and Server files.
@@ -111,7 +103,7 @@ The **plugin_cmd** configs in the NodeAttestor **sev-snp** are not set in `~/con
 ```conf
 # agent.conf
 NodeAttestor "sev_snp" {
-        plugin_cmd = "/home/ubuntu/spire/sev-snp-agent"
+        plugin_cmd = "<path_to_plugin_binary>"
         plugin_checksum = ""
         plugin_data {
 	        vcek_path = "<path/to/vcek>"
@@ -128,7 +120,7 @@ The **plugin_cmd** configs in the NodeAttestor **sev-snp** are not set in `~/con
 ```conf
 # server.conf
 NodeAttestor "sev_snp" {
-    plugin_cmd = "/home/ubuntu/spire/sev-snp-server"
+    plugin_cmd = "<path_to_plugin_binary>"
     plugin_checksum = ""
     plugin_data {
         amd_cert_chain = "<path/to/amd_certchain>"

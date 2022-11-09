@@ -1,4 +1,4 @@
-package main
+package snp
 
 import (
 	"context"
@@ -9,13 +9,14 @@ import (
 	"math/rand"
 	"net/url"
 	"path"
+	snp "snp/common"
+	snp_util "snp/server/snp/snputil"
 	"sync"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/hcl"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
-	"github.com/spiffe/spire-plugin-sdk/pluginmain"
 	"github.com/spiffe/spire-plugin-sdk/pluginsdk"
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
 	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
@@ -101,7 +102,7 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 
 	vcek := req.GetPayload()
 
-	valid, err := ValidateVCEKCertChain(vcek, config.AMDCertChain)
+	valid, err := snp_util.ValidateVCEKCertChain(vcek, config.AMDCertChain)
 	if !valid {
 		return err
 	}
@@ -118,12 +119,12 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 
 	reportBytes := challengeRes.GetChallengeResponse()
 
-	valid = ValidateGuestReportAgainstVCEK(&reportBytes, &vcek)
+	valid = snp_util.ValidateGuestReportAgainstVCEK(&reportBytes, &vcek)
 	if !valid {
 		return errors.New("unable to validate guest report against vcek")
 	}
 
-	report := BuildAttestationReport(reportBytes)
+	report := snp_util.BuildAttestationReport(reportBytes)
 
 	sha512Nonce := sha512.Sum512(nonce)
 	if report.ReportData != sha512Nonce {
@@ -147,7 +148,7 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 	})
 }
 
-func AgentID(pluginName, trustDomain string, report AttestationReport) string {
+func AgentID(pluginName, trustDomain string, report snp.AttestationReport) string {
 	sha1Measurement := sha1.Sum(report.Measurement[:])
 
 	u := url.URL{
@@ -179,7 +180,7 @@ func PrintByteArray(array []byte) string {
 	return str
 }
 
-func buildSelectorValues(report AttestationReport, vcek []byte) []string {
+func buildSelectorValues(report snp.AttestationReport, vcek []byte) []string {
 	selectorValues := []string{}
 
 	sha1VCEK := sha1.Sum(vcek)
@@ -247,15 +248,4 @@ func (p *Plugin) getConfig() (*Config, error) {
 		return nil, status.Error(codes.FailedPrecondition, "not configured")
 	}
 	return p.config, nil
-}
-
-func main() {
-	plugin := new(Plugin)
-	// Serve the plugin. This function call will not return. If there is a
-	// failure to serve, the process will exit with a non-zero exit code.
-	pluginmain.Serve(
-		nodeattestorv1.NodeAttestorPluginServer(plugin),
-		// TODO: Remove if no configuration is required
-		configv1.ConfigServiceServer(plugin),
-	)
 }
