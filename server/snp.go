@@ -183,8 +183,9 @@ func buildSelectorValues(report AttestationReport, vcek []byte) []string {
 	selectorValues := []string{}
 
 	sha1VCEK := sha1.Sum(vcek)
+	sha1Measurement := sha1.Sum(report.Measurement[:])
 
-	selectorValues = append(selectorValues, "measurement:"+PrintByteArray(report.Measurement[:]))
+	selectorValues = append(selectorValues, "measurement:"+PrintByteArray(sha1Measurement[:]))
 	selectorValues = append(selectorValues, "policy:"+fmt.Sprintf("0x%x", report.Policy))
 	selectorValues = append(selectorValues, "vcek:"+PrintByteArray(sha1VCEK[:]))
 

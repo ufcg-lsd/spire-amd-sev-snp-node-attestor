@@ -111,7 +111,7 @@ func GetReport(data [64]byte) ([]byte, error) {
 		return nil, fmt.Errorf("error: status: %d", reportResp.Status)
 	}
 
-	reportSize := unsafe.Sizeof(AttestationReport{})
+	reportSize := unsafe.Sizeof(reportResp.AttestationReport)
 	if reportResp.ReportSize > uint32(reportSize) {
 		return nil, fmt.Errorf("error: received report size: %d, expected %d", reportResp.ReportSize, reportSize)
 	}
