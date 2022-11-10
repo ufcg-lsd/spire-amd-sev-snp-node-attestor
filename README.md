@@ -22,11 +22,10 @@ The info about `measurement` and `policy` are included in the report
 
 * A Virtual Machine with Ubuntu operating system and SEV-SNP enabled;
 * A valid [GoLang](https://go.dev/doc/install) installation;
-* A valid [Docker](https://docs.docker.com/engine/install/ubuntu/) installation;
 
 ## 3. Running the plugin.
 
-The following steps describe how to configure the plugin to run in an environment with Ubuntu 20.04, and the SPIRE Agent and SPIRE Server running on the same machine, thta is a AMD SEV-SNP enabled guest VM. You can see how to run a guest with ubuntu 20.04 and SEV-SNP enabled [here](https://git.lsd.ufcg.edu.br/securedsp/AMDSEV). Notice that you may have to do some changes to run in other environments depending on the configs of it.
+The following steps describe how to configure the plugin to run in an environment with Ubuntu 20.04, and the SPIRE Agent and SPIRE Server running on the same machine, that is a AMD SEV-SNP enabled guest VM. You can see how to run a guest with ubuntu 20.04 and SEV-SNP enabled [here](https://git.lsd.ufcg.edu.br/securedsp/AMDSEV). Notice that you may have to do some changes to run in other environments depending on the configs of it.
 
 ### 3.1 Setting up environment.
 
