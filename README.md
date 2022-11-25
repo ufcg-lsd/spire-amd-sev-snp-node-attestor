@@ -4,7 +4,9 @@ An AMD SEV-SNP Node attestation plugin for SPIRE Server and SPIRE Agent.
 
 ## 1. How it works.
 
-The plugin consists of an attestation of an Agent, based on the guest report obtained by an ATTESTATION_REPORT command to the SEV-SNP firmware.
+The plugin consists of an attestation of an Agent, based on the guest report obtained by an ATTESTATION_REPORT command to the SEV-SNP firmware. The sequence diagram presented below depicts the workflow.
+
+![alt text](attestation-sequence.PNG)
 
 First, the Agent sends the chip VCEK to the Server so it can verify its authenticity using the AMD Root chain.
 
