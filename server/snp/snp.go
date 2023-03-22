@@ -2,7 +2,6 @@ package snp
 
 import (
 	"context"
-	"crypto/sha1"
 	"crypto/sha512"
 	"errors"
 	"fmt"
@@ -121,7 +120,7 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 }
 
 func AgentID(pluginName, trustDomain string, report snp.AttestationReport) string {
-	sha1Measurement := sha1.Sum(report.Measurement[:])
+	measurement := report.Measurement[:10]
 
 	u := url.URL{
 		Scheme: "spiffe",
@@ -132,7 +131,7 @@ func AgentID(pluginName, trustDomain string, report snp.AttestationReport) strin
 			pluginName,
 			uuid.New().String(),
 			"measurement",
-			PrintByteArray(sha1Measurement[:]),
+			PrintByteArray(measurement[:]),
 			"policy",
 			fmt.Sprintf("0x%x", report.Policy),
 		),
@@ -155,12 +154,19 @@ func PrintByteArray(array []byte) string {
 func buildSelectorValues(report snp.AttestationReport, vcek []byte) []string {
 	selectorValues := []string{}
 
-	sha1VCEK := sha1.Sum(vcek)
-	sha1Measurement := sha1.Sum(report.Measurement[:])
+	sha512VCEK := sha512.Sum512(vcek)
+	measurement := report.Measurement[:]
+	policy := snp_util.BuildPolicy(report)
 
-	selectorValues = append(selectorValues, "measurement:"+PrintByteArray(sha1Measurement[:]))
+	selectorValues = append(selectorValues, "measurement:"+PrintByteArray(measurement[:]))
 	selectorValues = append(selectorValues, "policy:"+fmt.Sprintf("0x%x", report.Policy))
-	selectorValues = append(selectorValues, "vcek:"+PrintByteArray(sha1VCEK[:]))
+	selectorValues = append(selectorValues, "policy:abi_minor:"+fmt.Sprintf("%d", policy.ABI_MINOR))
+	selectorValues = append(selectorValues, "policy:abi_major:"+fmt.Sprintf("%d", policy.ABI_MAJOR))
+	selectorValues = append(selectorValues, "policy:smt:"+fmt.Sprintf("%t", policy.SMT_ALLOWED))
+	selectorValues = append(selectorValues, "policy:migrate_ma:"+fmt.Sprintf("%t", policy.MIGRATE_MA_ALLOWED))
+	selectorValues = append(selectorValues, "policy:debug:"+fmt.Sprintf("%t", policy.DEBUG_ALLOWED))
+	selectorValues = append(selectorValues, "policy:single_socket:"+fmt.Sprintf("%t", policy.SINGLE_SOCKET_ALLOWED))
+	selectorValues = append(selectorValues, "vcek:"+PrintByteArray(sha512VCEK[:]))
 
 	return selectorValues
 }
