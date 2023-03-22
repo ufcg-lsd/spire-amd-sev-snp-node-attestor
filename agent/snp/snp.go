@@ -55,38 +55,53 @@ func IntToByteArray(num int16) []byte {
 
 func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestationServer) error {
 	config, err := p.getConfig()
+
 	if err != nil {
-		return err
+		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
 	}
 
 	vcekBin, err := os.ReadFile(config.VCEKPath)
 	if err != nil {
-		return err
+		return status.Errorf(codes.Internal, "unable to get vcek: %v", err)
 	}
 
-	stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
+	err = stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
 		Data: &nodeattestorv1.PayloadOrChallengeResponse_Payload{
 			Payload: vcekBin,
 		},
 	})
 
-	challenge, err := stream.Recv()
 	if err != nil {
-		return err
+		st := status.Convert(err)
+		return status.Errorf(st.Code(), "unable to send attestation data: %v", st.Message())
+	}
+
+	challenge, err := stream.Recv()
+
+	if err != nil {
+		st := status.Convert(err)
+		return status.Errorf(st.Code(), "unable to receive challenges: %v", st.Message())
 	}
 
 	nonce := sha512.Sum512(challenge.Challenge)
 	report, err := snp.GetReport(nonce)
 
 	if err != nil {
-		return err
+		return status.Errorf(codes.Internal, "unable to get report: %v", err)
 	}
 
-	return stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
+	err = stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
 		Data: &nodeattestorv1.PayloadOrChallengeResponse_ChallengeResponse{
 			ChallengeResponse: report,
 		},
 	})
+
+	if err != nil {
+		st := status.Convert(err)
+		return status.Errorf(st.Code(), "unable to send challenge response: %s", st.Message())
+	}
+
+	return nil
 }
 
 func (p *Plugin) Configure(ctx context.Context, req *configv1.ConfigureRequest) (*configv1.ConfigureResponse, error) {

@@ -5,6 +5,7 @@ import (
 	"crypto/sha512"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	snp "snp/common"
 	"unsafe"
@@ -30,6 +31,16 @@ func ValidateGuestReportAgainstVCEK(report *[]byte, vcek *[]byte) bool {
 	valid := ecdsa.Verify(pubKey, digest[:], parsedSignature.R, parsedSignature.S)
 
 	return valid
+}
+
+func ValidateGuestReportSize(report *[]byte) error {
+	var err error = nil
+
+	if len((*report)) != REPORT_LENGTH {
+		err = fmt.Errorf("invalid report length, expected: %d, but received: %d", REPORT_LENGTH, len((*report)))
+	}
+
+	return err
 }
 
 func getECDSAPubKeyFromByteArray(byteArray *[]byte) *ecdsa.PublicKey {
