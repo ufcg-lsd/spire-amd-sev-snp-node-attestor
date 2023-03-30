@@ -90,6 +90,11 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 
 	reportBytes := challengeRes.GetChallengeResponse()
 
+	err = snp_util.ValidateGuestReportSize(&reportBytes)
+	if err != nil {
+		return err
+	}
+
 	valid = snp_util.ValidateGuestReportAgainstVCEK(&reportBytes, &vcek)
 	if !valid {
 		return errors.New("unable to validate guest report against vcek")
