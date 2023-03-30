@@ -153,7 +153,19 @@ spire-agent run -config conf/agent/agent.conf
 
 Depending on your configuration, you must expect that the Agent has been successfully attested or not.
 
-## 6. References
+
+## 6. For testing the plugin.
+
+An AMD SEV-SNP VM is required to test this plugin. In `amd-sev-snp` directory run this command bellow.
+
+```
+sudo su
+export PATH=$PATH:/usr/local/go/bin
+# must be executed as root
+make test
+```
+
+## 7. References
 
 * [Spire SDK for plugin creation](https://github.com/spiffe/spire-plugin-sdk)
 * [Spire quickstart for Linux](https://spiffe.io/docs/latest/try/getting-started-linux-macos-x/)
