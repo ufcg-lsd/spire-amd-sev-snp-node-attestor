@@ -3,7 +3,6 @@ package snp
 import (
 	"context"
 	"crypto/sha512"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net/url"
@@ -61,50 +60,58 @@ func generateNonce(length uint8) []byte {
 }
 
 func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
+
 	config, err := p.getConfig()
 	if err != nil {
-		return err
+		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
 	}
 
 	req, err := stream.Recv()
 	if err != nil {
-		return err
+		return status.Errorf(codes.Internal, "failed to receive attestation request: %v", err)
 	}
 
 	vcek := req.GetPayload()
 
 	valid, err := snp_util.ValidateVCEKCertChain(vcek, config.AMDCertChain)
 	if !valid {
-		return err
+		return status.Errorf(codes.InvalidArgument, "unable to validate vcek with AMD cert chain: %v", err)
 	}
 
 	nonce := generateNonce(uint8(16))
 
-	stream.Send(&nodeattestorv1.AttestResponse{
+	err = stream.Send(&nodeattestorv1.AttestResponse{
 		Response: &nodeattestorv1.AttestResponse_Challenge{
 			Challenge: nonce,
 		},
 	})
 
-	challengeRes, _ := stream.Recv()
+	if err != nil {
+		return status.Errorf(status.Code(err), "unable to send challenges: %v", err)
+	}
+
+	challengeRes, err := stream.Recv()
+
+	if err != nil {
+		return status.Errorf(status.Code(err), "unable to receive challenges response: %v", err)
+	}
 
 	reportBytes := challengeRes.GetChallengeResponse()
-
 	err = snp_util.ValidateGuestReportSize(&reportBytes)
 	if err != nil {
-		return err
+		return status.Errorf(codes.Internal, "invalid report size: %v", err)
 	}
 
 	valid = snp_util.ValidateGuestReportAgainstVCEK(&reportBytes, &vcek)
 	if !valid {
-		return errors.New("unable to validate guest report against vcek")
+		return status.Errorf(codes.Internal, "unable to validate guest report against vcek: %v", err)
 	}
 
 	report := snp_util.BuildAttestationReport(reportBytes)
 
 	sha512Nonce := sha512.Sum512(nonce)
 	if report.ReportData != sha512Nonce {
-		return errors.New("invalid nonce received in report")
+		return status.Errorf(codes.Internal, "invalid nonce received in report: %v", err)
 	}
 
 	var spiffeID string
