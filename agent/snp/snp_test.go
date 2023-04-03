@@ -170,13 +170,13 @@ func TestAttestor(t *testing.T) {
 			name:               "error invalid vcek",
 			hcl_vcek:           fmt.Sprintf("vcek_path = \"%s\"\n", dir+"/invalidvcek.pem"),
 			hcl_amd_cert_chain: fmt.Sprintf("amd_cert_chain = \"%s\"\n", dir+"/cert_chain.pem"),
-			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Unknown desc = x509: certificate signed by unknown authority",
+			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = InvalidArgument desc = unable to validate vcek with AMD cert chain: x509: certificate signed by unknown authority",
 		},
 		{
 			name:               "error report with wrong",
 			hcl_vcek:           fmt.Sprintf("vcek_path = \"%s\"\n", dir+"/vcek.pem"),
 			hcl_amd_cert_chain: fmt.Sprintf("amd_cert_chain = \"%s\"\n", dir+"/cert_chain.pem"),
-			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Unknown desc = invalid nonce received in report",
+			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = invalid nonce received in report: <nil>",
 			report:             report,
 		},
 
@@ -184,14 +184,14 @@ func TestAttestor(t *testing.T) {
 			name:               "error report invalid signature",
 			hcl_vcek:           fmt.Sprintf("vcek_path = \"%s\"\n", dir+"/vcek.pem"),
 			hcl_amd_cert_chain: fmt.Sprintf("amd_cert_chain = \"%s\"\n", dir+"/cert_chain.pem"),
-			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Unknown desc = unable to validate guest report against vcek",
+			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = unable to validate guest report against vcek: <nil>",
 			report:             reportInvalidSignature,
 		},
 		{
 			name:               "error report invalid signature",
 			hcl_vcek:           fmt.Sprintf("vcek_path = \"%s\"\n", dir+"/vcek.pem"),
 			hcl_amd_cert_chain: fmt.Sprintf("amd_cert_chain = \"%s\"\n", dir+"/cert_chain.pem"),
-			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Unknown desc = invalid report length, expected: 1184, but received: 1181",
+			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = invalid report size: invalid report length, expected: 1184, but received: 1181",
 			report:             reportInvalidLength,
 		},
 	}
