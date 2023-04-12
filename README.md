@@ -2,159 +2,101 @@
 
 An AMD SEV-SNP Node attestation plugin for SPIRE Server and SPIRE Agent.
 
-## 1. How it works.
+## Server plugin: NodeAttestor "amd_sev_snp"
 
-The plugin consists of an attestation of an Agent, based on the guest report obtained by an ATTESTATION_REPORT command to the SEV-SNP firmware. The sequence diagram presented below depicts the workflow.
+*Must be used in conjunction with the agent-side amd_sev_snp plugin*
 
-![alt text](attestation-sequence.PNG)
+The `amd_sev_snp` plugin attests to nodes that have AMD SEV-SNP technology through an out-of-band mechanism.
 
-First, the Agent sends the chip VCEK to the Server so it can verify its authenticity using the AMD Root chain.
+Plugin steps summary:
 
-Once it is verified, the Server provides a Nonce to the Agent, which must be included in the attestation report.
+1. The plugin receives the request attestation with VCEK from SPIRE Agent and verifies that this VCEK was signed by the AMD root keys.
 
-The Agent requests from AMD SEV-SNP firmware an attestation report and provides the Nonce sent by the Server to it; after obtaining the report, the Agent sends it to the Server.
+2. The plugin sends a nonce to SPIRE Agent that will be used to create the attestation report.
 
-Then, the Server verifies that the report was signed by the private key of the VCEK, and verifies whether the Nonce included in the report is correct. If both verifications succeed, the Server provides the SPIFFE ID to the Agent following the template:
+3. The plugin receives the attestation report from SPIRE Agent and verifies if the attestation report has the nonce and it was signed by VCEK provided and issues a spiffe id with an uuid that identify uniquely this Agent.
 
-`spiffe://{{trust_domain}}/spire/agent/{{plugin_name}}/{{uuid}}/measurement/{{measurement}}/policy/{{policy}}`
+The attestation report has a couple of information about the node:
 
-The info about `measurement` and `policy` are included in the report 
+* **measurement**: Launch Measurement of the Guest AMD SEV-SNP.
+* **policy**: The guest policy that the guest owner provides to the firmware during launch.
 
-## 2. Dependencies.
+The SPIFFE ID produced by the server-side `amd_sev_snp` plugin is based on this information that the attestation report has.
 
-* A Virtual Machine with Ubuntu operating system and SEV-SNP enabled;
-* A valid [GoLang](https://go.dev/doc/install) installation;
+The SPIFFE ID has the form:
 
-## 3. Running the plugin.
-
-The following steps describe how to configure the plugin to run in an environment with Ubuntu 20.04, and the SPIRE Agent and SPIRE Server running on the same machine, that is a AMD SEV-SNP enabled guest VM. You can see how to run a guest with ubuntu 20.04 and SEV-SNP enabled [here](https://git.lsd.ufcg.edu.br/securedsp/AMDSEV). Notice that you may have to do some changes to run in other environments depending on the configs of it.
-
-### 3.1 Setting up environment.
-
-First of all, let's update and upgrade the packages of your OS to guarantee that everything is up-to-date.
-
-```sh
-sudo apt update -y
-sudo apt install build-essential -y
-sudo apt upgrade -y
+```xml
+spiffe://<trust_domain>/spire/agent/amd_sev_snp/<uuid>/measument/<measurement>/policy/<policy>
 ```
 
-Now, let's clone the SPIRE Project repo and build it:
+| Configuration           | Description                                                                                                                                                                                       | Default |
+|-------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| `amd_cert_chain`         | ASK/ARK certificates chain provided by AMD. |         |  |
 
-```sh
-# Clone the repository and go to the folder
-git clone https://github.com/spiffe/spire
-cd spire/
+A sample configuration:
 
-# Build the server and agent cli applications
-go build ./cmd/spire-server
-go build ./cmd/spire-agent
-
-# Copy the binaries to /usr/bin so you can have
-# access to 'spire-server' and 'spire-agent' commands
-sudo cp -r ./spire-server /usr/bin/
-sudo cp -r ./spire-agent /usr/bin/
+```hcl
+    NodeAttestor "amd_sev_snp" {
+        plugin_data {
+            amd_cert_chain = "<path/to/amd_certchain>"
+        }
+    }
 ```
 
-To test the installation, run:
+### Selectors
 
-```sh
-spire-server --version
-# 1.4.3-dev-unk
-spire-agent --version
-# 1.4.3-dev-unk
+| Selector                    | Example                                                           | Description                                                                              |
+|-----------------------------|-------------------------------------------------------------------|------------------------------------------------------------------------------------------|
+|  SHA1 measurement | `measurement:31b98075bee6ab756702f7a3692c92edb5f2cc0a`                                | Launch measurement of the AMD SEV-SNP machine.                                                               |
+| Policy         | `policy:0x30000`                               | The AMD SEV-SNP guest policy sent to firmware during launch.                                                                |
+| SHA1 VCEK            | `vcek:27e69b7334fb0e60597ff519f46eb667f7d147d6`  | The VCEK SHA1. |
+
+## Agent plugin: NodeAttestor "amd_sev_snp"
+
+*Must be used in conjunction with the server-side amd_sev_snp plugin*
+
+The `amd_sev_snp` plugin provides attestation data for a node that has the AMD SEV-SNP technology through an out-of-band mechanism.
+
+Plugin steps summary:
+
+1. The plugin gets the VCEK in the vcek_path and sends it in his attestation request to SPIRE Server.
+
+2. The plugin receives a nonce from SPIRE Server and uses it to create an attestation report.
+
+3. The plugin sends this attestation report to SPIRE Server.
+
+The attestation report has a couple of information about the node:
+
+* **measurement**: Launch Measurement of the Guest AMD SEV-SNP.
+* **policy**: The guest policy that the guest owner provides to the firmware during launch.
+
+The SPIFFE ID produced by the server-side `amd_sev_snp` plugin is based on this information that the attestation report has.
+
+The SPIFFE ID has the form:
+
+```xml
+spiffe://<trust_domain>/spire/agent/amd_sev_snp/<uuid>/measument/<measurement>/policy/<policy>
 ```
 
-now, you can copy the `conf` file inside SPIRE repository to `/home/$USER`.
+| Configuration                    | Description                                                                          | Default                                                   |
+|----------------------------------|--------------------------------------------------------------------------------------|-----------------------------------------------------------|
+| `vcek_path`                      | Path to a public ECDSA key which is unique to each AMD chip running a specific TCB version.        |  |
 
-```
-cp -r conf/ ~/
-cd ~/
-```
+A sample configuration:
 
-### 3.2 Building the plugin.
-
-Now let's clone the plugin repository.
-
-```sh
-git clone https://git.lsd.ufcg.edu.br/securedsp/amd-sev-snp-plugin.git
-cd amd-sev-snp-plugin/
-```
-
-build the agent and the server plugin.
-
-```sh
-make build BUILD_PATH=<PATH_TO_BUILD>
-
-# It will generate a <PATH_TO_BUILD>/snp-agent and <PATH_TO_BUILD>/snp-server binaries, 
-# which is the agent and server plugin binary respectively
-#  To simplify, you can set "~/" as the build path.
-```
-
-## 4. How to configure the Agent and Server files.
-
-First, replace the files you have copied to `/home/$USER/conf/agent/agent.conf` and `/home/$USER/conf/server/server.conf` with the `agent.conf` and `server.conf` files of this repository.
-
-```sh
-mv agent.conf ~/conf/agent/agent.conf
-mv server.conf ~/conf/server/server.conf
-cd ~/
-```
-
-### 4.1 Spire Agent configuration file.
-
-The **plugin_cmd** configs in the NodeAttestor **sev-snp** are not set in `~/conf/agent/agent.conf`, you must replace the **plugin_cmd** with the path of the agent sev-snp plugin binary that you have built. 
-
-```conf
-# agent.conf
-NodeAttestor "sev_snp" {
-        plugin_cmd = "<path_to_plugin_binary>"
-        plugin_checksum = ""
+```hcl
+    NodeAttestor "amd_sev_snp" {
         plugin_data {
 	        vcek_path = "<path/to/vcek>"
         }
 }
 ```
 
-To obtain the VCEK, you can use the `export_cert_chain_vcek` command of [sev-tool](https://github.com/AMDESE/sev-tool) to get it from the Host machine and then import it into the Guest VM.
+### Compatibility considerations
 
-*if you followed the instructions, the path is `/home/$USER/snp-agent`. (notice that you have to replace $USER with your username, env variables are not allowed in the config file)*
++ This plugin is designed to work with AMD SEV-SNP VMs. For more information check [this](https://developer.amd.com/sev/) documentation.
 
-### 4.2 Spire Server configuration file.
-
-The **plugin_cmd** configs in the NodeAttestor **sev-snp** are not set in `~/conf/server/server.conf`, you must replace the **plugin_cmd** with the path of the server sev-snp plugin binary that you have built. 
-
-```conf
-# server.conf
-NodeAttestor "sev_snp" {
-    plugin_cmd = "<path_to_plugin_binary>"
-    plugin_checksum = ""
-    plugin_data {
-        amd_cert_chain = "<path/to/amd_certchain>"
-    }
-}
-```
-
-You can find how to download the cert chain for your AMD secure processor following [this docs](https://www.amd.com/system/files/TechDocs/57230.pdf).
-
-*if you followed the instructions, the path is `/home/$USER/snp-server`. (notice that you have to replace $USER with your username, env variables are not allowed in the config file)*
-
-## 5. Running SPIRE with the plugin.
-
-Now that you have configured everything, you can run the SPIRE Server and the SPIRE Agent.
-
-```sh
-cd ~/
-
-spire-server run -config conf/server/server.conf
-
-spire-agent run -config conf/agent/agent.conf
-```
-
-Depending on your configuration, you must expect that the Agent has been successfully attested or not.
-
-
-## 6. For testing the plugin.
+## For testing the plugin
 
 An AMD SEV-SNP VM is required to test this plugin. In `amd-sev-snp` directory run this command bellow.
 
@@ -165,7 +107,7 @@ export PATH=$PATH:/usr/local/go/bin
 make test
 ```
 
-## 7. References
+## Demo
 
-* [Spire SDK for plugin creation](https://github.com/spiffe/spire-plugin-sdk)
-* [Spire quickstart for Linux](https://spiffe.io/docs/latest/try/getting-started-linux-macos-x/)
+To run a demonstration of the plugin, follow [these steps](./docs/demo.md).
+
