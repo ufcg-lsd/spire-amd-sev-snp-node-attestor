@@ -171,7 +171,6 @@ func buildSelectorValues(report snp.AttestationReport, vcek []byte) []string {
 	policy := snp_util.BuildPolicy(report)
 
 	selectorValues = append(selectorValues, "measurement:"+PrintByteArray(measurement[:]))
-	selectorValues = append(selectorValues, "policy:"+fmt.Sprintf("0x%x", report.Policy))
 	selectorValues = append(selectorValues, "policy:abi_minor:"+fmt.Sprintf("%d", policy.ABI_MINOR))
 	selectorValues = append(selectorValues, "policy:abi_major:"+fmt.Sprintf("%d", policy.ABI_MAJOR))
 	selectorValues = append(selectorValues, "policy:smt:"+fmt.Sprintf("%t", policy.SMT_ALLOWED))
