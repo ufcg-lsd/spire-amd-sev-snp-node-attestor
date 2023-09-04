@@ -2,11 +2,13 @@ package snp_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
 
 	agent "snp/agent/snp"
+	snp "snp/common"
 	server "snp/server/snp"
 
 	"github.com/spiffe/spire-plugin-sdk/pluginsdk"
@@ -99,7 +101,7 @@ CViAvgT9kf/rBq1d+ivj6skkHxuzcxbk1xv6ZGxrteJxVH7KlX7YRdZ6eARKwLe4
 AFZEAwoKCQ==
 -----END CERTIFICATE-----
 `
-	validVCEK = `
+	validEK = `
 -----BEGIN CERTIFICATE-----
 MIIFTDCCAvugAwIBAgIBADBGBgkqhkiG9w0BAQowOaAPMA0GCWCGSAFlAwQCAgUA
 oRwwGgYJKoZIhvcNAQEIMA0GCWCGSAFlAwQCAgUAogMCATCjAwIBATB7MRQwEgYD
@@ -132,26 +134,33 @@ hyGVbBncrAOPd9zfJmqvG8uRSPeOFmsoscZhnMaE/fPdithqvpgnIW4dbVq/UlGR
 DKpJt0E2bgfzQnLqhkHnog==
 -----END CERTIFICATE-----`
 
-	invalidVCEK = `
+	invalidEK = `
 -----BEGIN CERTIFICATE-----
-MIIBzDCCAVOgAwIBAgIJAJM4DhRH0vmuMAoGCCqGSM49BAMEMB4xCzAJBgNVBAYT
-AlVTMQ8wDQYDVQQKDAZTUElGRkUwHhcNMTgwNTEzMTkzMzQ3WhcNMjMwNTEyMTkz
-MzQ3WjAeMQswCQYDVQQGEwJVUzEPMA0GA1UECgwGU1BJRkZFMHYwEAYHKoZIzj0C
-AQYFK4EEACIDYgAEWjB+nSGSxIYiznb84xu5WGDZj80nL7W1c3zf48Why0ma7Y7m
-CBKzfQkrgDguI4j0Z+0/tDH/r8gtOtLLrIpuMwWHoe4vbVBFte1vj6Xt6WeE8lXw
-cCvLs/mcmvPqVK9jo10wWzAdBgNVHQ4EFgQUh6XzV6LwNazA+GTEVOdu07o5yOgw
-DwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAQYwGQYDVR0RBBIwEIYOc3Bp
-ZmZlOi8vbG9jYWwwCgYIKoZIzj0EAwQDZwAwZAIwE4Me13qMC9i6Fkx0h26y09QZ
-IbuRqA9puLg9AeeAAyo5tBzRl1YL0KNEp02VKSYJAjBdeJvqjJ9wW55OGj1JQwDF
-D7kWeEB6oMlwPbI/5hEY3azJi16I0uN1JSYTSWGSqWc=
------END CERTIFICATE-----
-
-`
+MIIDZzCCAk+gAwIBAgIUcL7A9bGVTX3iJQJGd/pa55HnXZgwDQYJKoZIhvcNAQEL
+BQAwQzELMAkGA1UEBhMCQlIxCzAJBgNVBAgMAlBCMQswCQYDVQQHDAJDRzEMMAoG
+A1UECgwDTFNEMQwwCgYDVQQLDANMU0QwHhcNMjMwODMxMTMxMDMzWhcNMjMwOTMw
+MTMxMDMzWjBDMQswCQYDVQQGEwJCUjELMAkGA1UECAwCUEIxCzAJBgNVBAcMAkNH
+MQwwCgYDVQQKDANMU0QxDDAKBgNVBAsMA0xTRDCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBAMHBg1h+5gVgLp82NHlIejegp7rMSAmPbhb/7+M3r8rg2ibW
+V3b7ohZWTMVqZY2kIlek4CNxhhetiG46hgz01QnjdnSq61LobFnNba8SztjCK9wo
+t62ttsF4FYHzrMx4n5MwpDOQIJtVOpgwTaou5hrBl6KEylwJF0v+Qd8vHkRnIaoj
+ek/uOx0LKdyOBJ03hqZHfrhdR7KEjY20lEcSLbMIb74HvP9zncADDnCRnp0J2QtS
+AZ0WcQJwqE68tyAuPFMFacj0VTZRBUM9rAXgSB67kRC1ZjEXZos7gmS6rIiknF7w
+8Aykn+SWWn2PhGv417tOlPgDjcEx/XwDOQhUBKECAwEAAaNTMFEwHQYDVR0OBBYE
+FGnzxc+z4g0fI2JglBeOynigZbLtMB8GA1UdIwQYMBaAFGnzxc+z4g0fI2JglBeO
+ynigZbLtMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAJUEz5Hx
+e/iIXf6nZFW4lZK/4FSpICNvVzJgADZkoYi392+ztHzJIWoXPWynTU2oOR4Z0OyO
+H/by3g9f2zvLGP4EkW5AMBcarF4bqVjdrL6kOb/PJ+RLVvREYJEIAsZCaeP5Xws7
+/rOChZi3jjhlG8EKQtqA/XvG8rrUC1nHcJGJqdr9Bts6l/v2zYQRJlDD9fU+JcpA
+4Au8ICLOq46Nd3PVULBklkZvPG8LaNimfaxJPxuFRUGdqYkN12Pg3F3XoRIKADwL
+5HaFpaY5vhiR5PDzZmuzm77ztkraBqWYXk5h/OW/kbMuVsJh8Z8EgjQjpxr0yxdp
+XJ1Gm64MrJOzMuU=
+-----END CERTIFICATE-----`
 )
 
 type testCases struct {
 	name               string
-	hcl_vcek           string
+	key                string
 	hcl_amd_cert_chain string
 	err                string
 	report             []byte
@@ -162,19 +171,13 @@ func TestAttestor(t *testing.T) {
 	dir := setup(t)
 	testCases := []testCases{
 		{
-			name:               "valid vcek",
-			hcl_vcek:           fmt.Sprintf("vcek_path = \"%s\"\n", dir+"/vcek.pem"),
+			name:               "error invalid ek",
+			key:                invalidEK,
 			hcl_amd_cert_chain: fmt.Sprintf("amd_cert_chain = \"%s\"\n", dir+"/cert_chain.pem"),
-		},
-		{
-			name:               "error invalid vcek",
-			hcl_vcek:           fmt.Sprintf("vcek_path = \"%s\"\n", dir+"/invalidvcek.pem"),
-			hcl_amd_cert_chain: fmt.Sprintf("amd_cert_chain = \"%s\"\n", dir+"/cert_chain.pem"),
-			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = InvalidArgument desc = unable to validate vcek with AMD cert chain: x509: certificate signed by unknown authority",
+			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = InvalidArgument desc = unable to validate ek with AMD cert chain: x509: certificate signed by unknown authority",
 		},
 		{
 			name:               "error report with wrong",
-			hcl_vcek:           fmt.Sprintf("vcek_path = \"%s\"\n", dir+"/vcek.pem"),
 			hcl_amd_cert_chain: fmt.Sprintf("amd_cert_chain = \"%s\"\n", dir+"/cert_chain.pem"),
 			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = invalid nonce received in report: <nil>",
 			report:             report,
@@ -182,14 +185,12 @@ func TestAttestor(t *testing.T) {
 
 		{
 			name:               "error report invalid signature",
-			hcl_vcek:           fmt.Sprintf("vcek_path = \"%s\"\n", dir+"/vcek.pem"),
 			hcl_amd_cert_chain: fmt.Sprintf("amd_cert_chain = \"%s\"\n", dir+"/cert_chain.pem"),
-			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = unable to validate guest report against vcek: <nil>",
+			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = unable to validate guest report against ek: <nil>",
 			report:             reportInvalidSignature,
 		},
 		{
 			name:               "error report invalid signature",
-			hcl_vcek:           fmt.Sprintf("vcek_path = \"%s\"\n", dir+"/vcek.pem"),
 			hcl_amd_cert_chain: fmt.Sprintf("amd_cert_chain = \"%s\"\n", dir+"/cert_chain.pem"),
 			err:                "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = invalid report size: invalid report length, expected: 1184, but received: 1181",
 			report:             reportInvalidLength,
@@ -198,7 +199,7 @@ func TestAttestor(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			agentPlugin := loadAgentPlugin(t, tc.hcl_vcek)
+			agentPlugin := loadAgentPlugin(t, "")
 			serverPlugin := loadServerPlugin(t, tc.hcl_amd_cert_chain)
 			attribs, err := doAttestationFlow(t, agentPlugin, serverPlugin, tc)
 
@@ -248,6 +249,7 @@ func doAttestationFlow(t *testing.T, agentPlugin agentnodeattestorv1.NodeAttesto
 		return nil, status.Errorf(codes.Internal, "failed to send payload to server plugin: %v", err)
 	}
 	for {
+
 		serverResponse, err := serverStream.Recv()
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to receive response from server plugin: %v", err)
@@ -274,18 +276,29 @@ func doAttestationFlow(t *testing.T, agentPlugin agentnodeattestorv1.NodeAttesto
 		require.Nil(t, agentResp.GetPayload(), "agent plugin responded with a payload instead of a challenge")
 		require.NotEmpty(t, agentResp.GetChallengeResponse(), "agent plugin responded with an empty challenge response")
 
-		report = nil
-		if tc.report != nil {
-			report = tc.report
-		} else {
-			report = agentResp.GetChallengeResponse()
+		attestationData := agentResp.GetChallengeResponse()
+		if tc.key != "" {
+			attestationData, err = json.Marshal(snp.AttestationRequest{
+				Report: agentResp.GetChallengeResponse()[:1184],
+				Cert:   []byte(tc.key),
+			})
+		} else if tc.report != nil {
+			attestationData, err = json.Marshal(snp.AttestationRequest{
+				Report: tc.report,
+				Cert:   []byte(validEK),
+			})
 		}
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "unable to marshal attestation data: %v", err)
+		}
+
 		if err := serverStream.Send(&servernodeattestorv1.AttestRequest{
 			Request: &servernodeattestorv1.AttestRequest_ChallengeResponse{
-				ChallengeResponse: report,
+				ChallengeResponse: attestationData,
 			},
 		}); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to send payload to server plugin: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to send challange response to server plugin: %v", err)
 		}
 	}
 }
@@ -342,17 +355,15 @@ func loadServerPlugin(t *testing.T, hclConfig string) servernodeattestorv1.NodeA
 func setup(t *testing.T) string {
 	dir := t.TempDir()
 
-	f, _ := os.Create(dir + "/vcek.pem")
-	f.Close()
 	f2, _ := os.Create(dir + "/cert_chain.pem")
 	f2.Close()
 
 	f3, _ := os.Create(dir + "/invalidvcek.pem")
 	f3.Close()
 
-	os.WriteFile(dir+"/vcek.pem", []byte(validVCEK), 0644)
+	os.WriteFile(dir+"/vcek.pem", []byte(validEK), 0644)
 	os.WriteFile(dir+"/cert_chain.pem", []byte(amdCertChain), 0644)
-	os.WriteFile(dir+"/invalidvcek.pem", []byte(invalidVCEK), 0644)
+	os.WriteFile(dir+"/invalidvcek.pem", []byte(invalidEK), 0644)
 
 	return dir
 }

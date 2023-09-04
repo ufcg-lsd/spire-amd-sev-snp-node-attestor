@@ -19,7 +19,7 @@ type ecdsaSignature struct {
 	R, S *big.Int
 }
 
-func ValidateGuestReportAgainstVCEK(report *[]byte, vcek *[]byte) bool {
+func ValidateGuestReportAgainstEK(report *[]byte, vcek *[]byte) bool {
 	pubKey := getECDSAPubKeyFromByteArray(vcek)
 
 	reportSplitted, signature := splitReportFromSignature(report)

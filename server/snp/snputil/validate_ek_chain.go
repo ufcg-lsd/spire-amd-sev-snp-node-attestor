@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func ValidateVCEKCertChain(vcek []byte, rootPath string) (bool, error) {
+func ValidateEKCertChain(ek []byte, rootPath string) (bool, error) {
 	rootPEM, err := os.ReadFile(rootPath)
 	if err != nil {
 		return false, err
@@ -18,7 +18,7 @@ func ValidateVCEKCertChain(vcek []byte, rootPath string) (bool, error) {
 		return false, err
 	}
 
-	block, _ := pem.Decode([]byte(vcek))
+	block, _ := pem.Decode([]byte(ek))
 	if block == nil {
 		return false, err
 	}

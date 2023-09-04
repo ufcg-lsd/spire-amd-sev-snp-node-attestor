@@ -2,13 +2,16 @@ package snp
 
 import (
 	"context"
+	"crypto/x509"
 	"crypto/sha512"
-	"os"
+	"encoding/json"
+	"encoding/pem"
+	snp "snp/common"
 	"sync"
 	"unsafe"
 
-	snp "snp/agent/snp/snputil"
-
+	"github.com/google/go-sev-guest/abi"
+	"github.com/google/go-sev-guest/client"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/hcl"
 	"github.com/spiffe/spire-plugin-sdk/pluginsdk"
@@ -24,7 +27,6 @@ var (
 )
 
 type Config struct {
-	VCEKPath string `hcl:"vcek_path"`
 }
 
 type Plugin struct {
@@ -54,20 +56,9 @@ func IntToByteArray(num int16) []byte {
 }
 
 func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestationServer) error {
-	config, err := p.getConfig()
-
-	if err != nil {
-		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
-	}
-
-	vcekBin, err := os.ReadFile(config.VCEKPath)
-	if err != nil {
-		return status.Errorf(codes.Internal, "unable to get vcek: %v", err)
-	}
-
-	err = stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
+	err := stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
 		Data: &nodeattestorv1.PayloadOrChallengeResponse_Payload{
-			Payload: vcekBin,
+			Payload: []byte(" "),
 		},
 	})
 
@@ -84,15 +75,39 @@ func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestatio
 	}
 
 	nonce := sha512.Sum512(challenge.Challenge)
-	report, err := snp.GetReport(nonce)
+
+	device, err := client.OpenDevice()
+	defer device.Close()
+
+	if err != nil {
+		st := status.Convert(err)
+		return status.Errorf(st.Code(), "unable to open device: %v", st.Message())
+	}
+
+	report, certificateTable, err := client.GetRawExtendedReport(device, nonce)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to get report: %v", err)
 	}
 
+	key, err := p.getChipKey(certificateTable)
+
+	if err != nil {
+		return status.Errorf(codes.Internal, "unable to get vek: %v", err)
+	}
+
+	attestationData, err := json.Marshal(snp.AttestationRequest{
+		Report: report,
+		Cert:   key,
+	})
+
+	if err != nil {
+		return status.Errorf(codes.Internal, "unable to marshal attestation data: %v", err)
+	}
+
 	err = stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
 		Data: &nodeattestorv1.PayloadOrChallengeResponse_ChallengeResponse{
-			ChallengeResponse: report,
+			ChallengeResponse: attestationData,
 		},
 	})
 
@@ -127,4 +142,36 @@ func (p *Plugin) getConfig() (*Config, error) {
 		return nil, status.Error(codes.FailedPrecondition, "not configured")
 	}
 	return p.config, nil
+}
+func (p *Plugin) getChipKey(certificateTable []byte) ([]byte, error) {
+	certs := new(abi.CertTable)
+	err := certs.Unmarshal(certificateTable)
+	if err != nil {
+		return nil, err
+	}
+	var ek []byte
+
+	ek, err = certs.GetByGUIDString(abi.VlekGUID)
+
+	if err != nil {
+		ek, err = certs.GetByGUIDString(abi.VcekGUID)
+
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		tmp, err := x509.ParseCertificate(ek)
+		if err != nil {
+			return nil, err
+		}
+
+		pemBlock := &pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: tmp.Raw,
+		}
+
+		ek = pem.EncodeToMemory(pemBlock)
+	}
+
+	return ek, nil
 }
