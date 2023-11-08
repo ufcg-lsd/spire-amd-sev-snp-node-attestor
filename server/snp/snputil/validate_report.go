@@ -1,14 +1,21 @@
 package snp
 
 import (
+	"crypto"
 	"crypto/ecdsa"
+	"crypto/rsa"
 	"crypto/sha512"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
 	snp "snp/common"
 	"unsafe"
+
+	"github.com/google/go-tpm/tpm2"
 )
 
 const SIGNATURE_OFFSET = 672
@@ -18,6 +25,9 @@ const REPORT_LENGTH = int(unsafe.Sizeof(snp.AttestationReport{}))
 type ecdsaSignature struct {
 	R, S *big.Int
 }
+
+//compare key used to sign/verify TPM quote with key that
+//is included in SNP report
 
 func ValidateGuestReportAgainstEK(report *[]byte, vcek *[]byte) bool {
 	pubKey := getECDSAPubKeyFromByteArray(vcek)
@@ -31,6 +41,90 @@ func ValidateGuestReportAgainstEK(report *[]byte, vcek *[]byte) bool {
 	valid := ecdsa.Verify(pubKey, digest[:], parsedSignature.R, parsedSignature.S)
 
 	return valid
+}
+
+func ValidateAKGuestReport(runtimeData *[]byte, ak *[]byte) bool {
+	akString := string(*ak)
+	runtimeAKString := getAKFromRuntimeData(*runtimeData)
+
+	return akString == runtimeAKString
+}
+
+func getAKFromRuntimeData(runtimeData []byte) string {
+	jsonData := string(runtimeData)
+
+	var keysData struct {
+		Keys []struct {
+			Kid string `json:"kid"`
+			N   string `json:"n"`
+			E   string `json:"e"`
+		} `json:"keys"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonData), &keysData); err != nil {
+		log.Fatalf("Failed to Unmarshal JSON: %v", err)
+	}
+
+	var publicKey *rsa.PublicKey
+	for _, key := range keysData.Keys {
+		if key.Kid == "HCLAkPub" {
+			nBytes, err := base64.RawURLEncoding.DecodeString(key.N)
+			if err != nil {
+				log.Fatalf("Failed decoding N value: %v", err)
+			}
+			eBytes, err := base64.RawURLEncoding.DecodeString(key.E)
+			if err != nil {
+				log.Fatalf("Failed decoding E value: %v", err)
+			}
+
+			n := new(big.Int).SetBytes(nBytes)
+			e := new(big.Int).SetBytes(eBytes)
+
+			publicKey = &rsa.PublicKey{
+				N: n,
+				E: int(e.Int64()),
+			}
+
+			break
+		}
+	}
+
+	if publicKey == nil {
+		log.Fatal("HCLAkPub key not found in JSON")
+	}
+
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		log.Fatalf("Failed to encode public key to PEM: %v", err)
+	}
+
+	pemBlock := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubKeyBytes,
+	}
+
+	pemString := string(pem.EncodeToMemory(pemBlock))
+	return pemString
+}
+
+func ValidateQuoteWithAK(akPubPem []byte, quote []byte, sig *tpm2.Signature) (bool, error) {
+	hsh := crypto.SHA256.New()
+	hsh.Write(quote)
+
+	rsaPubKey, err := getPublicKey(akPubPem)
+	if err != nil {
+		log.Printf("Error trying to get rsa public key: %v", err)
+		return false, err
+	}
+
+	err = rsa.VerifyPKCS1v15(rsaPubKey, crypto.SHA256, hsh.Sum(nil), sig.RSA.Signature)
+	if err != nil {
+		log.Printf("Faild to verify tpm quote: %v", err)
+		return false, err
+	}
+
+	log.Println("Quote successfully verified\n")
+	return true, nil
 }
 
 func ValidateGuestReportSize(report *[]byte) error {
@@ -85,4 +179,25 @@ func revertBytes(bytes []byte) []byte {
 		bytes[i], bytes[j] = bytes[j], bytes[i]
 	}
 	return bytes
+}
+
+func getPublicKey(akPubPem []byte) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode(akPubPem)
+	if block == nil {
+		log.Println("Error decoding PEM")
+	}
+
+	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		log.Println("Error parsing RSA public key:", string(akPubPem))
+		return nil, err
+	}
+
+	rsaPubKey, ok := publicKey.(*rsa.PublicKey)
+	if !ok {
+		log.Println("A chave não é uma chave RSA pública")
+		return nil, err
+	}
+
+	return rsaPubKey, nil
 }
