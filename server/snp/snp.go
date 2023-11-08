@@ -1,6 +1,7 @@
 package snp
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha512"
 	"encoding/json"
@@ -61,19 +62,110 @@ func generateNonce(length uint8) []byte {
 	return nonce
 }
 
-func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
-
+func (p *Plugin) AttestTPM(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 	config, err := p.getConfig()
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
 	}
 
-	req, err := stream.Recv()
+	nonce := generateNonce(uint8(16))
+
+	err = stream.Send(&nodeattestorv1.AttestResponse{
+		Response: &nodeattestorv1.AttestResponse_Challenge{
+			Challenge: nonce,
+		},
+	})
+
 	if err != nil {
-		return status.Errorf(codes.Internal, "failed to receive attestation request: %v", err)
+		return status.Errorf(status.Code(err), "unable to send challenges: %v", err)
 	}
 
-	req.GetPayload()
+	res, err := stream.Recv()
+
+	if err != nil {
+		return status.Errorf(status.Code(err), "unable to receive challenges response: %v", err)
+	}
+
+	challengeResponse := res.GetChallengeResponse()
+
+	attestation := &snp.AttestationRequestAzure{}
+
+	if err = json.Unmarshal(challengeResponse, attestation); err != nil {
+		return status.Errorf(codes.Internal, "unable to unmarshal challenge response: %v", err)
+	}
+
+	str := []byte("")
+	err = stream.Send(&nodeattestorv1.AttestResponse{
+		Response: &nodeattestorv1.AttestResponse_Challenge{
+			Challenge: str,
+		},
+	})
+
+	quote, err := stream.Recv()
+
+	if err != nil {
+		return status.Errorf(status.Code(err), "unable to receive quote: %v", err)
+	}
+
+	quotePayload := quote.GetChallengeResponse()
+
+	quoteData := &snp.QuoteData{}
+
+	if err = json.Unmarshal(quotePayload, quoteData); err != nil {
+		return status.Errorf(codes.Internal, "unable to unmarshal quote response: %v", err)
+	}
+
+	valid, err := snp_util.ValidateEKCertChain(attestation.Cert, config.AMDCertChain)
+
+	if !valid {
+		return status.Errorf(codes.InvalidArgument, "unable to validate ek with AMD cert chain: %v", err)
+	}
+
+	err = snp_util.ValidateGuestReportSize(&attestation.Report)
+	if err != nil {
+		return status.Errorf(codes.Internal, "invalid report size: %v", err)
+	}
+
+	valid = snp_util.ValidateGuestReportAgainstEK(&attestation.Report, &attestation.Cert)
+	if !valid {
+		return status.Errorf(codes.Internal, "unable to validate guest report against ek: %v", err)
+	}
+
+	checkQuote, err := snp_util.ValidateQuoteWithAK(attestation.TPMCert, quoteData.Quote, quoteData.Sig)
+
+	if !checkQuote {
+		return status.Error(codes.InvalidArgument, "unable to check quote:")
+	}
+
+	valid = snp_util.ValidateAKGuestReport(&attestation.RuntimeData, &attestation.TPMCert)
+	if !valid {
+		return status.Errorf(codes.Internal, "unable to validate guest report against ak: %v", err)
+	}
+
+	report := snp_util.BuildAttestationReport(attestation.Report)
+
+	var spiffeID string
+	var selectors []string
+
+	spiffeID = AgentID(pluginName, config.trustDomain.String(), report)
+	selectors = buildSelectorValues(report, attestation.Cert)
+	return stream.Send(&nodeattestorv1.AttestResponse{
+		Response: &nodeattestorv1.AttestResponse_AgentAttributes{
+			AgentAttributes: &nodeattestorv1.AgentAttributes{
+				SpiffeId:       spiffeID,
+				SelectorValues: selectors,
+				CanReattest:    false,
+			},
+		},
+	})
+}
+
+func (p *Plugin) AttestSNP(stream nodeattestorv1.NodeAttestor_AttestServer) error {
+
+	config, err := p.getConfig()
+	if err != nil {
+		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
+	}
 
 	nonce := generateNonce(uint8(16))
 
@@ -138,6 +230,21 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 			},
 		},
 	})
+}
+
+func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
+	req, err := stream.Recv()
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to receive attestation request: %v", err)
+	}
+
+	attestationType := req.GetPayload()
+
+	if bytes.Equal(attestationType, []byte("Attestation Azure")) {
+		return p.AttestTPM(stream)
+	}
+
+	return p.AttestSNP(stream)
 }
 
 func AgentID(pluginName, trustDomain string, report snp.AttestationReport) string {

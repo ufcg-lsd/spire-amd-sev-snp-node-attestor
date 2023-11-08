@@ -2,13 +2,19 @@ package snp
 
 import (
 	"context"
-	"crypto/x509"
+	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
+	"log"
+	"os"
 	snp "snp/common"
 	"sync"
 	"unsafe"
+
+	snputil "snp/agent/snp/snputil"
 
 	"github.com/google/go-sev-guest/abi"
 	"github.com/google/go-sev-guest/client"
@@ -55,7 +61,91 @@ func IntToByteArray(num int16) []byte {
 	return arr
 }
 
-func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestationServer) error {
+func (p *Plugin) AttestationAzureSNP(stream nodeattestorv1.NodeAttestor_AidAttestationServer) error {
+	err := stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
+		Data: &nodeattestorv1.PayloadOrChallengeResponse_Payload{
+			Payload: []byte("Attestation Azure"),
+		},
+	})
+	if err != nil {
+		st := status.Convert(err)
+		return status.Errorf(st.Code(), "unable to send attestation data: %v", st.Message())
+	}
+
+	challenge, err := stream.Recv()
+	if err != nil {
+		st := status.Convert(err)
+		return status.Errorf(st.Code(), "unable to receive challenges: %v", st.Message())
+	}
+
+	nonce := sha256.Sum256(challenge.Challenge)
+
+	report, err := snputil.GetReportTPM()
+
+	if err != nil {
+		return status.Errorf(codes.Internal, "unable to get report: %v", err)
+	}
+
+	key, err := snputil.GetVCEK()
+
+	if err != nil {
+		return status.Errorf(codes.Internal, "Error: %v", err)
+	}
+
+	ak, nil := snputil.GetAK()
+	if err != nil {
+		return status.Errorf(codes.Internal, "Error trying to get AK:", err)
+	}
+
+	runtimeData, err := snputil.GetRuntimeData()
+
+	attestationData, err := json.Marshal(snp.AttestationRequestAzure{
+		Report:      report,
+		Cert:        key,
+		TPMCert:     ak,
+		RuntimeData: runtimeData,
+	})
+
+	if err != nil {
+		return status.Errorf(codes.Internal, "unable to marshal attestation data: %v", err)
+	}
+
+	err = stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
+		Data: &nodeattestorv1.PayloadOrChallengeResponse_ChallengeResponse{
+			ChallengeResponse: attestationData,
+		},
+	})
+
+	if err != nil {
+		st := status.Convert(err)
+		return status.Errorf(st.Code(), "unable to send challenge response: %s", st.Message())
+	}
+
+	quote, sig, err := snputil.GetQuoteTPM(nonce)
+
+	quoteData, err := json.Marshal(snp.QuoteData{
+		Quote: quote,
+		Sig:   sig,
+	})
+
+	if err != nil {
+		return status.Errorf(codes.Internal, "unable to marshal quote data: %v", err)
+	}
+	recv, err := stream.Recv()
+	if err != nil {
+		log.Fatal(err)
+		fmt.Print(recv)
+	}
+	err = stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
+		Data: &nodeattestorv1.PayloadOrChallengeResponse_ChallengeResponse{
+			ChallengeResponse: quoteData,
+		},
+	})
+
+	return nil
+}
+
+func (p *Plugin) AttestationSNP(stream nodeattestorv1.NodeAttestor_AidAttestationServer) error {
 	err := stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
 		Data: &nodeattestorv1.PayloadOrChallengeResponse_Payload{
 			Payload: []byte(" "),
@@ -93,7 +183,7 @@ func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestatio
 	key, err := p.getChipKey(certificateTable)
 
 	if err != nil {
-		return status.Errorf(codes.Internal, "unable to get vek: %v", err)
+		return status.Errorf(codes.Internal, "unable to get vek:", err)
 	}
 
 	attestationData, err := json.Marshal(snp.AttestationRequest{
@@ -117,6 +207,14 @@ func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestatio
 	}
 
 	return nil
+}
+
+func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestationServer) error {
+	device := "/dev/sev-guest"
+	if _, err := os.Stat(device); os.IsNotExist(err) {
+		return p.AttestationAzureSNP(stream)
+	}
+	return p.AttestationSNP(stream)
 }
 
 func (p *Plugin) Configure(ctx context.Context, req *configv1.ConfigureRequest) (*configv1.ConfigureResponse, error) {
