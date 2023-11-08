@@ -2,8 +2,10 @@
 
 The AMD SEV-SNP node attestation plugin can attest on-premise and public cloud providers' SEV-SNP VMs. 
 
-- For attestation workflow details refer to [this documentation](./docs/attestation.md).
-- For information about running the plugin in public cloud providers refer to [this documentation](./docs/cloud-providers.md).
+- For attestation workflow details, refer to [this documentation](./docs/attestation.md).
+- To ensure disk integrity and confidentiality, refer to [this documentation](./docs/disk-integrity-confidentiality.md).
+- For information about running the plugin in public cloud providers, refer to [this documentation](./docs/cloud-providers.md).
+- For details about the SEV-SNP technology, refer to [this documentation](./docs/amd-sev-snp.md).
 
 ## Server plugin: NodeAttestor "amd_sev_snp"
 
@@ -46,6 +48,8 @@ NodeAttestor "amd_sev_snp" {
 ```
 
 The `ek_path` field refers to the VCEK or VLEK provided by the cloud provider. This field is optional, if it is not provided the plugin will try to obtain the VCEK or VLEK from the AMD-SP cache. If the VCEK or VLEK is not in the cache, the plugin will try to load it from the file system through the `ek_path` field. To obtain the VCEK/VLEK from the AMD Key Distribution System (KDS) check [this documentation](./docs/snpguest.md).
+
+*** There is no need to configure the VCEK in the Azure flow once the plugin handles this ***
 
 ### Selectors
 

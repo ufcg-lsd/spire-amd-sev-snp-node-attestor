@@ -17,3 +17,9 @@ Notice that although the SEV-SNP plugin worked in all mentioned flavours, some A
 To instantiate VMs with AMD-SEV-SNP enabled on GCP, it is necessary to request access to the private preview of your GCP project. We executed the plugin on the N2D instance flavors. Notice that AMD SEV-SNP VMs are only available in specific regions and zones: us-central1, europe-west4, and asia southeast1.
 
 To this date (05/11/2023), the GCP is not providing the Endorsement Key (EK) in the AMD-SP cache. Therefore, running the plugin on GCP requires specifying the `ek_path` in the agent conf file. To retrieve the EK, refer to the [snpguest tool](https://github.com/virtee/snpguest#). Alternatively, you may refer to [this simple tutorial](snpguest.md) we created.
+
+### Azure 
+
+To instantiate VMs with AMD-SEV-SNP enabled on Azure, it is necessary to use the `az cli` and Ubuntu images (Ubuntu 20.04, Ubuntu 22.04). We created a new attestation flow to Azure confidential VM once they do not expose the `sev-guest` device. Notice that AMD SEV-SNP VMs are only available in specific regions and zones. We use `West US` to deploy the VMs.
+
+To this date (05/11/2023), Azure is not providing the Endorsement Key (EK) in the cache. Therefore, running the plugin on Azure requires specifying the `ek_path` in the agent conf file or letting the plugin download the EK by itself. To retrieve the EK, follow this Azure [documentation](https://github.com/Azure/confidential-computing-cvm-guest-attestation/blob/main/cvm-guest-attestation.md).

@@ -1,5 +1,7 @@
 # RFC - SEV SNP Node Attestation Plugin
 
+**Warning:** This RFC is being kept the same as published to the community (https://github.com/spiffe/spire/issues/4469). The improvements made to the plugin since that date are not reflected in this document but are reflected in other documentation of this repo.
+
 ## Abstract
 
 This document defines the AMD Secure Encrypted Virtualization-Secure Nested Paging (SEV-SNP) Node Attestation Plugin for SPIRE. The plugin provides a mechanism for verifying the identity of SEV-SNP-enabled Virtual Machines (VMs) by leveraging the hardware-based attestation capabilities of the AMD SEV-SNP processor. The document provides detailed specifications for the plugin, including its workflow, threat model, and description of its chain of trust. It also describes the security considerations and deployment scenarios for the plugin.
@@ -160,7 +162,7 @@ sequenceDiagram
     deactivate kern
     alt disk is ok
     init->>vm: load root fs and boot
-        owner->>vm: request Attestation Report
+        owner->>vm: request Attestation Reem formatoport
         activate vm
         vm->>sp: request Attestation Report
         activate sp
@@ -350,6 +352,7 @@ spiffe://<trust-domain>/spire/agent/amd_sev_snp/chip_id/31b98075bee6ab756702f7a3
 ## Request for Comments
 
 This proposal seeks to elicit feedback on the proposed approach for an AMD SEV-SNP Node Attestation Plugin. The plugin aims to enhance the security of virtualized environments by verifying the identity of SEV-SNP-enabled VMs by leveraging the hardware-based attestation capabilities of the AMD SEV-SNP processor. We welcome any comments, suggestions, or concerns you may have about the proposal.
+
 
 Authors:
 
