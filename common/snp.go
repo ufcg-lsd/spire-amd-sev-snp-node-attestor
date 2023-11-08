@@ -74,3 +74,10 @@ type AttestationRequest struct {
 	Report []byte
 	Cert   []byte
 }
+
+type AttestationRequestAzure struct {
+	Report      []byte
+	Cert        []byte
+	TPMCert     []byte
+	RuntimeData []byte
+}
