@@ -1,9 +1,11 @@
 package snp
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
 	"encoding/base64"
@@ -107,9 +109,16 @@ func getAKFromRuntimeData(runtimeData []byte) string {
 	return pemString
 }
 
-func ValidateQuoteWithAK(akPubPem []byte, quote []byte, sig *tpm2.Signature) (bool, error) {
+func ValidateQuoteWithAK(akPubPem []byte, quote []byte, sig *tpm2.Signature, nonce []byte) (bool, error) {
 	hsh := crypto.SHA256.New()
 	hsh.Write(quote)
+
+	quoteInfo := getQuoteInfo(quote)
+	valid, err := verifyNonce(nonce, quoteInfo.Nonce)
+	if !valid {
+		log.Printf("Error trying to verify nonce: %v", err)
+		return false, err
+	}
 
 	rsaPubKey, err := getPublicKey(akPubPem)
 	if err != nil {
@@ -127,6 +136,12 @@ func ValidateQuoteWithAK(akPubPem []byte, quote []byte, sig *tpm2.Signature) (bo
 	return true, nil
 }
 
+func verifyNonce(nonce []byte, quoteNonce []byte) (bool, error) {
+	shaNonce := sha256.Sum256(nonce)
+
+	return bytes.Equal(shaNonce[:], quoteNonce), nil
+}
+
 func ValidateGuestReportSize(report *[]byte) error {
 	var err error = nil
 
@@ -135,6 +150,22 @@ func ValidateGuestReportSize(report *[]byte) error {
 	}
 
 	return err
+}
+
+type QuoteInfo struct {
+	Head  []byte
+	Nonce []byte
+	Quote []byte
+}
+
+func getQuoteInfo(quote []byte) QuoteInfo {
+	var info QuoteInfo
+
+	info.Head = quote[:44]
+	info.Nonce = quote[44:76]
+	info.Quote = quote[76:]
+
+	return info
 }
 
 func getECDSAPubKeyFromByteArray(byteArray *[]byte) *ecdsa.PublicKey {

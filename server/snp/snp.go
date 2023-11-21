@@ -131,7 +131,7 @@ func (p *Plugin) AttestTPM(stream nodeattestorv1.NodeAttestor_AttestServer) erro
 		return status.Errorf(codes.Internal, "unable to validate guest report against ek: %v", err)
 	}
 
-	checkQuote, err := snp_util.ValidateQuoteWithAK(attestation.TPMCert, quoteData.Quote, quoteData.Sig)
+	checkQuote, err := snp_util.ValidateQuoteWithAK(attestation.TPMCert, quoteData.Quote, quoteData.Sig, nonce)
 
 	if !checkQuote {
 		return status.Error(codes.InvalidArgument, "unable to check quote:")
