@@ -63,7 +63,7 @@ NodeAttestor "amd_sev_snp" {
 }
 ```
 
-The `ek_path` field refers to the VCEK or VLEK provided by the cloud provider. This field is optional, if it is not provided the plugin will try to obtain the VCEK or VLEK from the AMD-SP cache. If the VCEK or VLEK is not in the cache, the plugin will try to load it from the file system through the `ek_path` field. To obtain the VCEK/VLEK from the AMD Key Distribution System (KDS) check [this documentation](./docs/snpguest.md).
+The `ek_path` field refers to the VCEK or VLEK provided by the cloud provider. This field is optional, if it is not provided the plugin will obtain the VCEK or VLEK along with the report. If it is provided, the plugin will load it from the file system through the `ek_path` field. To obtain the VCEK/VLEK from the AMD Key Distribution System (KDS) check [this documentation](./docs/snpguest.md).
 
 ### Selectors
 
