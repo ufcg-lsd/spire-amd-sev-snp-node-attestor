@@ -22,12 +22,17 @@ spiffe://<trust-domain>/spire/agent/amd_sev_snp/chip_id/<truncated_chip_id>/meas
 NodeAttestor "amd_sev_snp" {
     plugin_cmd = "<path/to/plugin_binary>"
     plugin_data {
-        amd_cert_chain = "<path/to/amd_certchain>"
+        vcek_cert_chain = "<path/to/vcek_cert_chain>"
+        vlek_cert_chain = "<path/to/vlek_cert_chain>"
+        crl_url = "<website_url>"
+        crl_path = "<path/to/crl.der>"
+        fetch_crl_priority = "url"
+        default_behavior = "continue"
     }
 }
 ```
 
-The `amd_cert_chain` field refers to the ASK/ARK certificates chain provided by AMD.
+The `vcek_cert_chain` and `vlek_cert_chain` fields refers to the ASK/ARK certificates chain provided by AMD.
 To get one of `amd_cert_chain` you can use the commands below:
 
 ```bash
@@ -37,13 +42,23 @@ curl --proto '=https' --tlsv1.2 -sSf https://kdsintf.amd.com/vlek/v1/Milan/cert_
 curl --proto '=https' --tlsv1.2 -sSf https://kdsintf.amd.com/vcek/v1/Milan/cert_chain -o cert_chain.pem
 ```
 
+The `crl_url` and `crl_path` fields refer to ways of obtaining the Certificate Revocation List (CRL). The CRL file can be obtained from a URL or an archive path. The `fetch_crl_priority` defines which of the two ways are going to be used. You can replace this field with "url" or "path". If the CRL fails to fetch from the website, the `default_behavior` defines whether the plugin will abort the attestation or simply issue a warning and proceed with the attestation. You can replace this field with "continue" or "abort".
+
+To replace the `crl_url` parameter you can use one of the URLs below:
+```bash
+# VLEK
+https://kdsintf.amd.com/vlek/v1/Milan/crl
+# VCEK
+https://kdsintf.amd.com/vcek/v1/Milan/crl
+```
+
 ### Agent Configuration
 
 ```hcl
 NodeAttestor "amd_sev_snp" {
     plugin_cmd = "<path/to/plugin_binary>"
     plugin_data {
-        ek_path = "<path/to/ek>"
+        ek_path = ""
     }
 }
 ```

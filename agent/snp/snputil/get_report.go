@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-tpm/tpmutil"
 )
 
-func GetReportTPM() ([]byte, error) {
+func GetReportTPM() ([]byte, []byte, error) {
 	rwc := GetTPM().rwc
 
 	var snpReportIndex tpmutil.Handle = 0x01400001
@@ -21,21 +21,10 @@ func GetReportTPM() ([]byte, error) {
 
 	reportBin := initReport[32 : 32+1184]
 
-	return reportBin, nil
+	return reportBin, initReport, nil
 }
 
-func GetRuntimeData() ([]byte, error) {
-	rwc := GetTPM().rwc
-
-	var snpReportIndex tpmutil.Handle = 0x01400001
-
-	var tpmAuthHandle tpmutil.Handle = 0x40000001
-
-	initReport, err := tpm2.NVReadEx(rwc, snpReportIndex, tpmAuthHandle, "", 0)
-	if err != nil {
-		fmt.Errorf("Error reading nv index: ", err)
-	}
-
+func GetRuntimeData(initReport []byte) ([]byte, error) {
 	// Data to be skipped in the report
 	skipBytes := 1236
 

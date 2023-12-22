@@ -33,6 +33,7 @@ var (
 )
 
 type Config struct {
+	Ek string `hcl:"ek_path"`
 }
 
 type Plugin struct {
@@ -80,24 +81,30 @@ func (p *Plugin) AttestationAzureSNP(stream nodeattestorv1.NodeAttestor_AidAttes
 
 	nonce := sha256.Sum256(challenge.Challenge)
 
-	report, err := snputil.GetReportTPM()
+	report, initReport, err := snputil.GetReportTPM()
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to get report: %v", err)
 	}
 
-	key, err := snputil.GetVCEK()
+	config, _ := p.getConfig()
+	var key []byte
 
+	if config.Ek == "" {
+		key, err = snputil.GetVCEK()
+	}else {
+		key, err = os.ReadFile(config.Ek)
+	}
 	if err != nil {
 		return status.Errorf(codes.Internal, "Error: %v", err)
 	}
 
 	ak, nil := snputil.GetAK()
 	if err != nil {
-		return status.Errorf(codes.Internal, "Error trying to get AK:", err)
+		return status.Errorf(codes.Internal, "Error trying to get AK: %v", err)
 	}
 
-	runtimeData, err := snputil.GetRuntimeData()
+	runtimeData, err := snputil.GetRuntimeData(initReport)
 
 	attestationData, err := json.Marshal(snp.AttestationRequestAzure{
 		Report:      report,
@@ -174,16 +181,24 @@ func (p *Plugin) AttestationSNP(stream nodeattestorv1.NodeAttestor_AidAttestatio
 		return status.Errorf(st.Code(), "unable to open device: %v", st.Message())
 	}
 
-	report, certificateTable, err := client.GetRawExtendedReport(device, nonce)
+	config, _ := p.getConfig()
+	var certificateTable []byte
+	var report []byte
+
+	if config.Ek == "" {
+		report, certificateTable, err = client.GetRawExtendedReport(device, nonce)
+	} else {
+		report, err = client.GetRawReport(device, nonce)
+	}
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to get report: %v", err)
 	}
 
-	key, err := p.getChipKey(certificateTable)
+	key, err := p.getChipKey(certificateTable, report)
 
 	if err != nil {
-		return status.Errorf(codes.Internal, "unable to get vek:", err)
+		return status.Errorf(codes.Internal, "unable to get ek: %v", err)
 	}
 
 	attestationData, err := json.Marshal(snp.AttestationRequest{
@@ -241,34 +256,46 @@ func (p *Plugin) getConfig() (*Config, error) {
 	}
 	return p.config, nil
 }
-func (p *Plugin) getChipKey(certificateTable []byte) ([]byte, error) {
-	certs := new(abi.CertTable)
-	err := certs.Unmarshal(certificateTable)
-	if err != nil {
-		return nil, err
-	}
+func (p *Plugin) getChipKey(certificateTable []byte, report []byte) ([]byte, error) {
+
+	var err error
 	var ek []byte
+	signingKey := snp.GetSigningKey(&report)
+	config, _ := p.getConfig()
 
-	ek, err = certs.GetByGUIDString(abi.VlekGUID)
-
-	if err != nil {
-		ek, err = certs.GetByGUIDString(abi.VcekGUID)
-
+	if config.Ek != "" {
+		ek, err = os.ReadFile(config.Ek)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		tmp, err := x509.ParseCertificate(ek)
+		certs := new(abi.CertTable)
+		err := certs.Unmarshal(certificateTable)
 		if err != nil {
 			return nil, err
 		}
 
-		pemBlock := &pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: tmp.Raw,
-		}
+		if signingKey == 0 {
+			ek, err = certs.GetByGUIDString(abi.VcekGUID)
 
-		ek = pem.EncodeToMemory(pemBlock)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			ek, _ = certs.GetByGUIDString(abi.VlekGUID)
+
+			tmp, err := x509.ParseCertificate(ek)
+			if err != nil {
+				return nil, err
+			}
+
+			pemBlock := &pem.Block{
+				Type:  "CERTIFICATE",
+				Bytes: tmp.Raw,
+			}
+
+			ek = pem.EncodeToMemory(pemBlock)
+		}
 	}
 
 	return ek, nil

@@ -35,8 +35,13 @@ const (
 )
 
 type Config struct {
-	trustDomain  spiffeid.TrustDomain
-	AMDCertChain string `hcl:"amd_cert_chain"`
+	trustDomain      spiffeid.TrustDomain
+	VcekAMDCertChain string `hcl:"vcek_cert_chain"`
+	VlekAMDCertChain string `hcl:"vlek_cert_chain"`
+	CRLPath          string `hcl:"crl_path"`
+	CRLUrl           string `hcl:"crl_url"`
+	CRLPriority      string `hcl:"fetch_crl_priority"`
+	DefaultBehavior  string `hcl:"default_behavior"`
 }
 
 type Plugin struct {
@@ -115,15 +120,33 @@ func (p *Plugin) AttestTPM(stream nodeattestorv1.NodeAttestor_AttestServer) erro
 		return status.Errorf(codes.Internal, "unable to unmarshal quote response: %v", err)
 	}
 
-	valid, err := snp_util.ValidateEKCertChain(attestation.Cert, config.AMDCertChain)
+	err = snp_util.ValidateGuestReportSize(&attestation.Report)
+	if err != nil {
+		return status.Errorf(codes.Internal, "invalid report size: %v", err)
+	}
+
+	signingKey := snp.GetSigningKey(&attestation.Report)
+	var valid = false
+	var certChainUsed string
+	if signingKey == 0 {
+		valid, err = snp_util.ValidateEKCertChain(attestation.Cert, config.VcekAMDCertChain)
+		certChainUsed = config.VcekAMDCertChain
+	} else {
+		valid, err = snp_util.ValidateEKCertChain(attestation.Cert, config.VlekAMDCertChain)
+		certChainUsed = config.VlekAMDCertChain
+	}
 
 	if !valid {
 		return status.Errorf(codes.InvalidArgument, "unable to validate ek with AMD cert chain: %v", err)
 	}
 
-	err = snp_util.ValidateGuestReportSize(&attestation.Report)
-	if err != nil {
-		return status.Errorf(codes.Internal, "invalid report size: %v", err)
+	certIsValid, err := snp_util.CheckRevocationList(attestation.Cert, certChainUsed, p.config.CRLPath, p.config.CRLUrl, p.config.CRLPriority, p.config.DefaultBehavior)
+	if !certIsValid {
+		if err.Error() == "fetch CRL error" {
+			p.logger.Warn("Couldn't fetch CRL")
+		} else {
+			return status.Errorf(codes.Aborted, "failed at CRL verification; %v", err)
+		}
 	}
 
 	valid = snp_util.ValidateGuestReportAgainstEK(&attestation.Report, &attestation.Cert)
@@ -154,7 +177,7 @@ func (p *Plugin) AttestTPM(stream nodeattestorv1.NodeAttestor_AttestServer) erro
 			AgentAttributes: &nodeattestorv1.AgentAttributes{
 				SpiffeId:       spiffeID,
 				SelectorValues: selectors,
-				CanReattest:    false,
+				CanReattest:    true,
 			},
 		},
 	})
@@ -193,20 +216,38 @@ func (p *Plugin) AttestSNP(stream nodeattestorv1.NodeAttestor_AttestServer) erro
 		return status.Errorf(codes.Internal, "unable to unmarshal challenge response: %v", err)
 	}
 
-	valid, err := snp_util.ValidateEKCertChain(attestation.Cert, config.AMDCertChain)
-
-	if !valid {
-		return status.Errorf(codes.InvalidArgument, "unable to validate ek with AMD cert chain: %v", err)
-	}
-
 	err = snp_util.ValidateGuestReportSize(&attestation.Report)
 	if err != nil {
 		return status.Errorf(codes.Internal, "invalid report size: %v", err)
 	}
 
+	signingKey := snp.GetSigningKey(&attestation.Report)
+	var valid = false
+	var certChainUsed string
+	if signingKey == 0 {
+		valid, err = snp_util.ValidateEKCertChain(attestation.Cert, config.VcekAMDCertChain)
+		certChainUsed = config.VcekAMDCertChain
+	} else {
+		valid, err = snp_util.ValidateEKCertChain(attestation.Cert, config.VlekAMDCertChain)
+		certChainUsed = config.VlekAMDCertChain
+	}
+
+	if !valid {
+		return status.Errorf(codes.InvalidArgument, "unable to validate ek with AMD cert chain: %v", err)
+	}
+
+	certIsValid, err := snp_util.CheckRevocationList(attestation.Cert, certChainUsed, p.config.CRLPath, p.config.CRLUrl, p.config.CRLPriority, p.config.DefaultBehavior)
+	if !certIsValid {
+		if err.Error() == "fetch CRL error" {
+			p.logger.Warn("Couldn't fetch CRL")
+		} else {
+			return status.Errorf(codes.Aborted, "failed at CRL verification; %v", err)
+		}
+	}
+
 	valid = snp_util.ValidateGuestReportAgainstEK(&attestation.Report, &attestation.Cert)
 	if !valid {
-		return status.Errorf(codes.Internal, "unable to validate guest report against ek: %v", err)
+		return status.Errorf(codes.Internal, "unable to validate guest report against ek: Invalid signature")
 	}
 
 	report := snp_util.BuildAttestationReport(attestation.Report)
@@ -226,7 +267,7 @@ func (p *Plugin) AttestSNP(stream nodeattestorv1.NodeAttestor_AttestServer) erro
 			AgentAttributes: &nodeattestorv1.AgentAttributes{
 				SpiffeId:       spiffeID,
 				SelectorValues: selectors,
-				CanReattest:    false,
+				CanReattest:    true,
 			},
 		},
 	})
