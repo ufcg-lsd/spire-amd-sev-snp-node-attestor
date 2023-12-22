@@ -14,4 +14,4 @@ build:
 	go build -o ${AGENT_PLUGIN_PATH} agent/agent_plugin.go
 
 test:
-	go test ./agent/snp/
+	go test ./tests
