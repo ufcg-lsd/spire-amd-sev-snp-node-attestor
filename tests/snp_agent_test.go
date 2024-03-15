@@ -39,10 +39,8 @@ type testCases struct {
 	report          []byte
 	VcekAMDCertChain string
 	VlekAMDCertChain string
-	CRLUrl           string
-	CRLPath           string
-	CRLPriority      string
-	DefaultBehavior  string
+	VcekCRLUrl       string
+	VlekCRLUrl       string
 }
 
 func TestAttestor(t *testing.T) {
@@ -55,14 +53,22 @@ func TestAttestor(t *testing.T) {
 			report: report,
 			err:             "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = InvalidArgument desc = unable to validate ek with AMD cert chain: x509: certificate signed by unknown authority",
 		},
+		{
+			name:            "URL does not return the crl",
+			key:             string(vcek),
+			conf: fmt.Sprintf(`
+				vcek_cert_chain = "%s"
+				vcek_crl_url = "https://kdsintf.amd.com/vcek/v1/Rome/crl"
+			`, dir+"/vcek_cert_chain.pem"),
+			err:             "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Aborted desc = failed at CRL verification: couldn't fetch CRL using the provided URL and cache is empty",
+			report:          report,
+		},
 		{	
 			name:            "error report with invalid nonce",
 			key:             string(vcek),
 			conf: fmt.Sprintf(`
 				vcek_cert_chain = "%s"
-				crl_url = "https://kdsintf.amd.com/vcek/v1/Milan/crl"
-				fetch_crl_priority = "url"
-				default_behavior = "continue"
+				vcek_crl_url = "https://kdsintf.amd.com/vcek/v1/Milan/crl"
 			`, dir + "/vcek_cert_chain.pem"),
 			report:          report,
 			err:             "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = invalid nonce received in report: <nil>",
@@ -72,9 +78,7 @@ func TestAttestor(t *testing.T) {
 			key:             string(vcek),
 			conf: fmt.Sprintf(`
 				vcek_cert_chain = "%s"
-				crl_url = "https://kdsintf.amd.com/vcek/v1/Milan/crl"
-				fetch_crl_priority = "url"
-				default_behavior = "continue"
+				vcek_crl_url = "https://kdsintf.amd.com/vcek/v1/Milan/crl"
 			`, dir + "/vcek_cert_chain.pem"),
 			err:             "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = unable to validate guest report against ek: Invalid signature",
 			report:          reportInvalidSignature,
@@ -83,48 +87,10 @@ func TestAttestor(t *testing.T) {
 			name:            "error invalid report length",
 			conf: fmt.Sprintf(`
 				vcek_cert_chain = "%s"
-				crl_url = "https://kdsintf.amd.com/vcek/v1/Milan/crl"
-				fetch_crl_priority = "url"
-				default_behavior = "continue"
+				vcek_crl_url = "https://kdsintf.amd.com/vcek/v1/Milan/crl"
 			`, dir + "/vcek_cert_chain.pem"),
 			err:             "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = invalid report size: invalid report length, expected: 1184, but received: 1181",
 			report:          reportInvalidLength,
-		},
-		{
-			name:            "URL does not return the crl and  default_behavior is set to abort",
-			key:             string(vcek),
-			conf: fmt.Sprintf(`
-				vcek_cert_chain = "%s"
-				crl_url = "https://kdsintf.amd.com/vcek/v1/Rome/crl"
-				fetch_crl_priority = "url"
-				default_behavior = "abort"
-			`, dir+"/vcek_cert_chain.pem"),
-			err:             "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Aborted desc = failed at CRL verification; x509: malformed crl",
-			report:          report,
-		},
-		{
-			name:            "nonexistent CRL path and fetch_crl_priority = path",
-			key:             string(vcek),
-			conf: fmt.Sprintf(`
-				vcek_cert_chain = "%s"
-				crl_path = ""
-				fetch_crl_priority = "path"
-				default_behavior = "continue"
-			`, dir+"/vcek_cert_chain.pem"),
-			err:             "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Aborted desc = failed at CRL verification; open : no such file or directory",
-			report:          report,
-		},
-		{
-			name:            "existent CRL path and fetch_crl_priority = path",
-			key:             string(vcek),
-			conf: fmt.Sprintf(`
-				vcek_cert_chain = "%s"
-				crl_path = "%s"
-				fetch_crl_priority = "path"
-				default_behavior = "continue"
-			`, dir+"/vcek_cert_chain.pem", dir+"/crl.der"),
-			err:             "rpc error: code = Internal desc = failed to receive response from server plugin: rpc error: code = Internal desc = invalid nonce received in report: <nil>",
-			report:          report,
 		},
 	}
 
@@ -215,12 +181,12 @@ func doAttestationFlow(t *testing.T, agentPlugin agentnodeattestorv1.NodeAttesto
 
 		attestationData := agentResp.GetChallengeResponse()
 		if tc.key != "" && tc.report == nil{ 
-			attestationData, err = json.Marshal(snp.AttestationRequest{
+			attestationData, err = json.Marshal(snp.AttestationDataRequest{
 				Report: agentResp.GetChallengeResponse()[:1184],
 				Cert:   []byte(tc.key),
 			})
 		} else if tc.report != nil {
-			attestationData, err = json.Marshal(snp.AttestationRequest{
+			attestationData, err = json.Marshal(snp.AttestationDataRequest{
 				Report: tc.report,
 				Cert:   []byte(tc.key), 
 			})

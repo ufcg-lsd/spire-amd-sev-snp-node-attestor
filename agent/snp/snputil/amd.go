@@ -3,9 +3,11 @@ package snp
 import (
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
-	"io/ioutil"
+
+	"io"
 	"net/http"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func GetVCEK() ([]byte, error) {
@@ -13,7 +15,7 @@ func GetVCEK() ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
-		fmt.Errorf("Unable to make an http request to the ek azure service:", err)
+		return nil, status.Errorf(codes.Internal, "Unable to make an http request to the ek azure service: %v", err)
 	}
 
 	req.Header.Add("Metadata", "true")
@@ -21,29 +23,29 @@ func GetVCEK() ([]byte, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Errorf("Error HTTP request:", err)
+		return nil, status.Errorf(codes.Internal, "Error HTTP request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Errorf("Response not OK:", resp.Status)
+		return nil, status.Errorf(codes.Internal, "Response not OK: %v", resp.Status)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Errorf("Error reading rensponse body:", err)
+		return nil, status.Errorf(codes.Internal, "Error reading rensponse body: %v", err)
 	}
 
 	var jsonData map[string]string
 	if err := json.Unmarshal(body, &jsonData); err != nil {
-		fmt.Errorf("Error JSON unmarshal:", err)
+		return nil, status.Errorf(codes.Internal, "Error JSON unmarshal: %v", err)
 	}
 
 	pemData := jsonData["vcekCert"] + jsonData["certificateChain"]
 
 	pemBlock, _ := pem.Decode([]byte(pemData))
 	if pemBlock == nil {
-		fmt.Errorf("Error decoding PEM block")
+		return nil, status.Error(codes.Internal, "Error decoding PEM block")
 	}
 
 	key := pem.EncodeToMemory(pemBlock)

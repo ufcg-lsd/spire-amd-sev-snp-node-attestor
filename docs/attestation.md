@@ -45,7 +45,7 @@ sequenceDiagram
     deactivate AMDSP
     Agent-->>Server: EK + Attestation Report (nonce included)
     deactivate Agent
-    Note right of Server: 1) Verify the EK<br/>against AMD cert chain<br/>2) Verify nonce <br/>3) Verify signature
+    Note right of Server: 1) Verify nonce <br/> 2) Verify the EK against AMD cert chain <br/> 3) Verify report signature against AMD EK
     Server->>Server: 
     Server-->>Agent: SVID
     deactivate Server
@@ -81,12 +81,46 @@ sequenceDiagram
     deactivate HCL
     Agent-->>Server: EK + Attestation Report + AK + Quote (nonce included)
     deactivate Agent
-    Note right of Server: 1) Verify the EK<br/>against AMD cert chain<br/>2) Verify signature <br/>3) Validate Quote against<br/>signature, AK and nonce<br/>4)Verify binding between<br/>AK and Attestation Report
+    Note right of Server: 1) Validate Quote against signature, AK and nonce <br/> 2) Verify binding between AK and Attestation Report <br/>3) Verify the EK against AMD cert chain <br/> 4) Verify report signature against AMD EK
     Server-->>Agent: SVID
     deactivate Server
 ```
 
-*** HCL is the VPML 0 in the Azure architecture, where vTPM is located ***
+***HCL is the VPML 0 in the Azure architecture, where vTPM is located***
 
-## vTPM provided through SVSM for on-premise (WIP)
+## vTPM provided through SVSM for on-premise
 
+```mermaid
+sequenceDiagram
+    participant HCL as HCL<br/>SVSM-vTPM
+    participant Agent as Agent in CVM
+    participant Server as Server
+    Agent->>Server: Request SVID
+    activate Server
+    Server->>Agent: Request Registration SVSM
+    activate Agent
+    Agent->>Agent: load AMD EK from file system 
+    Agent->>HCL: Request Attestation Report, TPM EK and TPM AIK
+    activate HCL
+    HCL-->>Agent: Attestation Report, AMD EK, TPM EK and TPM AIK 
+    deactivate HCL
+    Agent-->>Server: Registration SVSM data(Attestation Report, AMD EK, TPM EK and TPM AIK)
+    deactivate Agent
+    Note right of Server: 1) Verify if the attestation report contains TPM EK<br/>2) Create a challenge using the TPM MakeCredential<br/> function with a secret, AIK and TPM EK.
+    Server->>Agent: Request Attestation SVSM providing challenge and nonce
+    activate Agent
+    Agent->>HCL: Request ActivateCredential for challenge
+    activate HCL
+    HCL-->>Agent: Retrieve the SVSM-vTPM challenge secret
+    deactivate HCL
+    Agent->>HCL: Request Quote with nonce
+    activate HCL
+    HCL-->>Agent: Quote (nonce included) signed by TPM AIK
+    deactivate HCL
+    Agent-->>Server: Response Attestation SVSM (challenge secret and Quote with nonce)
+    deactivate Agent
+    Note right of Server: 1) Verify if secret it is the same sent <br/> 2) Verify the Quote against TPM AIK and nonce <br/> 3) Verify the AMD EK against AMD cert chain <br/> 4) Verify report signature against AMD EK
+    Server-->>Agent: SVID
+    deactivate Server
+
+```

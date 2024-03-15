@@ -70,7 +70,7 @@ type AttestationReport struct {
 	Signature       Signature
 }
 
-type AttestationRequest struct {
+type AttestationDataRequest struct {
 	Report []byte
 	Cert   []byte
 }
@@ -80,4 +80,21 @@ type AttestationRequestAzure struct {
 	Cert        []byte
 	TPMCert     []byte
 	RuntimeData []byte
+}
+
+type RegistrationRequestSVSM struct {
+	Report []byte
+	Cert   []byte
+	TPMEK  []byte
+	TPMAIK []byte
+}
+
+type AttestationRequestSVSM struct {
+	Challenge Challenge
+	Nonce     []byte
+}
+
+type AttestationResponseSVSM struct {
+	QuoteData QuoteData
+	Secret    []byte
 }

@@ -24,33 +24,45 @@ NodeAttestor "amd_sev_snp" {
     plugin_data {
         vcek_cert_chain = "<path/to/vcek_cert_chain>"
         vlek_cert_chain = "<path/to/vlek_cert_chain>"
-        crl_url = "<website_url>"
-        crl_path = "<path/to/crl.der>"
-        fetch_crl_priority = "url"
-        default_behavior = "continue"
+        vcek_crl_url = "<vcek_website_url>"
+        vlek_crl_url = "<vlek_website_url>"
+        insecure_crl = false
     }
 }
 ```
 
-The `vcek_cert_chain` and `vlek_cert_chain` fields refers to the ASK/ARK certificates chain provided by AMD.
-To get one of `amd_cert_chain` you can use the commands below:
+The `vcek_cert_chain` and `vlek_cert_chain` fields refer to the ASK/ARK certificates chain provided by AMD.
+To get these cert chains you can use the commands below:
 
 ```bash
 # VLEK
-curl --proto '=https' --tlsv1.2 -sSf https://kdsintf.amd.com/vlek/v1/Milan/cert_chain -o cert_chain.pem
+curl --proto '=https' --tlsv1.2 -sSf https://kdsintf.amd.com/vlek/v1/Milan/cert_chain -o vlek_cert_chain.pem
 # VCEK
-curl --proto '=https' --tlsv1.2 -sSf https://kdsintf.amd.com/vcek/v1/Milan/cert_chain -o cert_chain.pem
+curl --proto '=https' --tlsv1.2 -sSf https://kdsintf.amd.com/vcek/v1/Milan/cert_chain -o vcek_cert_chain.pem
 ```
 
-The `crl_url` and `crl_path` fields refer to ways of obtaining the Certificate Revocation List (CRL). The CRL file can be obtained from a URL or an archive path. The `fetch_crl_priority` defines which of the two ways are going to be used. You can replace this field with "url" or "path". If the CRL fails to fetch from the website, the `default_behavior` defines whether the plugin will abort the attestation or simply issue a warning and proceed with the attestation. You can replace this field with "continue" or "abort".
-
-To replace the `crl_url` parameter you can use one of the URLs below:
+The `vcek_crl_url` and `vcek_crl_url` fields refer to ways of obtaining the Certificate Revocation List (CRL). With this configuration set, you guarantee that it will not be possible to use a certificate revoked by the issuing entity. To replace the url parameter you can use one of the URLs below:
 ```bash
 # VLEK
 https://kdsintf.amd.com/vlek/v1/Milan/crl
 # VCEK
 https://kdsintf.amd.com/vcek/v1/Milan/crl
 ```
+
+If `insecure_crl` option is set to true, the CRL verification will be skipped. By default, this field is set to false. 
+
+A sample configuration:
+
+```hcl
+NodeAttestor "amd_sev_snp" {
+    plugin_cmd = "/home/ubuntu/snp-server-plugin"
+    plugin_data {
+        vlek_cert_chain = "/home/ubuntu/vlek_cert_chain.pem"
+        vlek_crl_url = "https://kdsintf.amd.com/vlek/v1/Milan/crl"
+    }
+}
+```
+
 
 ### Agent Configuration
 
@@ -63,7 +75,12 @@ NodeAttestor "amd_sev_snp" {
 }
 ```
 
-The `ek_path` field refers to the VCEK or VLEK provided by the cloud provider. This field is optional, if it is not provided the plugin will obtain the VCEK or VLEK along with the report. If it is provided, the plugin will load it from the file system through the `ek_path` field. To obtain the VCEK/VLEK from the AMD Key Distribution System (KDS) check [this documentation](./docs/snpguest.md).
+The `ek_path` field refers to the VCEK or VLEK public key present on the AMD processor, which the private part signs the attestation report. This field is optional, if it is not provided the plugin will obtain the VCEK or VLEK along with the report. If it is provided, the plugin will load it from the file system through the `ek_path` field. Notice that in some cases, the plugin will not be able to retrieve the EK from the processor:
+
+* If you are running a VM on-premise with SVSM;
+* If the key is not loaded on the processor's shared memory.
+
+In this case, the `ek_path` field must be provided. To obtain the VCEK/VLEK public key from the AMD Key Distribution System (KDS) check [this documentation](./docs/snpguest.md).
 
 ### Selectors
 
