@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha512"
-	"encoding/json"
 	"fmt"
-	"math/rand"
+
 	"net/url"
 	"path"
 	"sync"
 
 	snp "snp/common"
+	snp_attestation "snp/server/snp/attestations"
 	snp_util "snp/server/snp/snputil"
 
 	"github.com/hashicorp/go-hclog"
@@ -38,10 +38,9 @@ type Config struct {
 	trustDomain      spiffeid.TrustDomain
 	VcekAMDCertChain string `hcl:"vcek_cert_chain"`
 	VlekAMDCertChain string `hcl:"vlek_cert_chain"`
-	CRLPath          string `hcl:"crl_path"`
-	CRLUrl           string `hcl:"crl_url"`
-	CRLPriority      string `hcl:"fetch_crl_priority"`
-	DefaultBehavior  string `hcl:"default_behavior"`
+	VcekCRLUrl       string `hcl:"vcek_crl_url"`
+	VlekCRLUrl       string `hcl:"vlek_crl_url"`
+	InsecureCRL      bool   `hcl:"insecure_crl"`
 }
 
 type Plugin struct {
@@ -60,232 +59,112 @@ func (p *Plugin) BrokerHostServices(broker pluginsdk.ServiceBroker) error {
 	return nil
 }
 
-func generateNonce(length uint8) []byte {
-	nonce := make([]byte, length)
-	rand.Read(nonce)
-
-	return nonce
-}
-
-func (p *Plugin) AttestTPM(stream nodeattestorv1.NodeAttestor_AttestServer) error {
-	config, err := p.getConfig()
-	if err != nil {
-		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
-	}
-
-	nonce := generateNonce(uint8(16))
-
-	err = stream.Send(&nodeattestorv1.AttestResponse{
-		Response: &nodeattestorv1.AttestResponse_Challenge{
-			Challenge: nonce,
-		},
-	})
-
-	if err != nil {
-		return status.Errorf(status.Code(err), "unable to send challenges: %v", err)
-	}
-
-	res, err := stream.Recv()
-
-	if err != nil {
-		return status.Errorf(status.Code(err), "unable to receive challenges response: %v", err)
-	}
-
-	challengeResponse := res.GetChallengeResponse()
-
-	attestation := &snp.AttestationRequestAzure{}
-
-	if err = json.Unmarshal(challengeResponse, attestation); err != nil {
-		return status.Errorf(codes.Internal, "unable to unmarshal challenge response: %v", err)
-	}
-
-	str := []byte("")
-	err = stream.Send(&nodeattestorv1.AttestResponse{
-		Response: &nodeattestorv1.AttestResponse_Challenge{
-			Challenge: str,
-		},
-	})
-
-	quote, err := stream.Recv()
-
-	if err != nil {
-		return status.Errorf(status.Code(err), "unable to receive quote: %v", err)
-	}
-
-	quotePayload := quote.GetChallengeResponse()
-
-	quoteData := &snp.QuoteData{}
-
-	if err = json.Unmarshal(quotePayload, quoteData); err != nil {
-		return status.Errorf(codes.Internal, "unable to unmarshal quote response: %v", err)
-	}
-
-	err = snp_util.ValidateGuestReportSize(&attestation.Report)
-	if err != nil {
-		return status.Errorf(codes.Internal, "invalid report size: %v", err)
-	}
-
-	signingKey := snp.GetSigningKey(&attestation.Report)
-	var valid = false
-	var certChainUsed string
-	if signingKey == 0 {
-		valid, err = snp_util.ValidateEKCertChain(attestation.Cert, config.VcekAMDCertChain)
-		certChainUsed = config.VcekAMDCertChain
-	} else {
-		valid, err = snp_util.ValidateEKCertChain(attestation.Cert, config.VlekAMDCertChain)
-		certChainUsed = config.VlekAMDCertChain
-	}
-
-	if !valid {
-		return status.Errorf(codes.InvalidArgument, "unable to validate ek with AMD cert chain: %v", err)
-	}
-
-	certIsValid, err := snp_util.CheckRevocationList(attestation.Cert, certChainUsed, p.config.CRLPath, p.config.CRLUrl, p.config.CRLPriority, p.config.DefaultBehavior)
-	if !certIsValid {
-		if err.Error() == "fetch CRL error" {
-			p.logger.Warn("Couldn't fetch CRL")
-		} else {
-			return status.Errorf(codes.Aborted, "failed at CRL verification; %v", err)
-		}
-	}
-
-	valid = snp_util.ValidateGuestReportAgainstEK(&attestation.Report, &attestation.Cert)
-	if !valid {
-		return status.Errorf(codes.Internal, "unable to validate guest report against ek: %v", err)
-	}
-
-	checkQuote, err := snp_util.ValidateQuoteWithAK(attestation.TPMCert, quoteData.Quote, quoteData.Sig, nonce)
-
-	if !checkQuote {
-		return status.Error(codes.InvalidArgument, "unable to check quote:")
-	}
-
-	valid = snp_util.ValidateAKGuestReport(&attestation.RuntimeData, &attestation.TPMCert)
-	if !valid {
-		return status.Errorf(codes.Internal, "unable to validate guest report against ak: %v", err)
-	}
-
-	report := snp_util.BuildAttestationReport(attestation.Report)
-
-	var spiffeID string
-	var selectors []string
-
-	spiffeID = AgentID(pluginName, config.trustDomain.String(), report)
-	selectors = buildSelectorValues(report, attestation.Cert)
-	return stream.Send(&nodeattestorv1.AttestResponse{
-		Response: &nodeattestorv1.AttestResponse_AgentAttributes{
-			AgentAttributes: &nodeattestorv1.AgentAttributes{
-				SpiffeId:       spiffeID,
-				SelectorValues: selectors,
-				CanReattest:    true,
-			},
-		},
-	})
-}
-
-func (p *Plugin) AttestSNP(stream nodeattestorv1.NodeAttestor_AttestServer) error {
-
-	config, err := p.getConfig()
-	if err != nil {
-		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
-	}
-
-	nonce := generateNonce(uint8(16))
-
-	err = stream.Send(&nodeattestorv1.AttestResponse{
-		Response: &nodeattestorv1.AttestResponse_Challenge{
-			Challenge: nonce,
-		},
-	})
-
-	if err != nil {
-		return status.Errorf(status.Code(err), "unable to send challenges: %v", err)
-	}
-
-	res, err := stream.Recv()
-
-	if err != nil {
-		return status.Errorf(status.Code(err), "unable to receive challenges response: %v", err)
-	}
-
-	challengeResponse := res.GetChallengeResponse()
-
-	attestation := &snp.AttestationRequest{}
-
-	if err = json.Unmarshal(challengeResponse, attestation); err != nil {
-		return status.Errorf(codes.Internal, "unable to unmarshal challenge response: %v", err)
-	}
-
-	err = snp_util.ValidateGuestReportSize(&attestation.Report)
-	if err != nil {
-		return status.Errorf(codes.Internal, "invalid report size: %v", err)
-	}
-
-	signingKey := snp.GetSigningKey(&attestation.Report)
-	var valid = false
-	var certChainUsed string
-	if signingKey == 0 {
-		valid, err = snp_util.ValidateEKCertChain(attestation.Cert, config.VcekAMDCertChain)
-		certChainUsed = config.VcekAMDCertChain
-	} else {
-		valid, err = snp_util.ValidateEKCertChain(attestation.Cert, config.VlekAMDCertChain)
-		certChainUsed = config.VlekAMDCertChain
-	}
-
-	if !valid {
-		return status.Errorf(codes.InvalidArgument, "unable to validate ek with AMD cert chain: %v", err)
-	}
-
-	certIsValid, err := snp_util.CheckRevocationList(attestation.Cert, certChainUsed, p.config.CRLPath, p.config.CRLUrl, p.config.CRLPriority, p.config.DefaultBehavior)
-	if !certIsValid {
-		if err.Error() == "fetch CRL error" {
-			p.logger.Warn("Couldn't fetch CRL")
-		} else {
-			return status.Errorf(codes.Aborted, "failed at CRL verification; %v", err)
-		}
-	}
-
-	valid = snp_util.ValidateGuestReportAgainstEK(&attestation.Report, &attestation.Cert)
-	if !valid {
-		return status.Errorf(codes.Internal, "unable to validate guest report against ek: Invalid signature")
-	}
-
-	report := snp_util.BuildAttestationReport(attestation.Report)
-
-	sha512Nonce := sha512.Sum512(nonce)
-	if report.ReportData != sha512Nonce {
-		return status.Errorf(codes.Internal, "invalid nonce received in report: %v", err)
-	}
-
-	var spiffeID string
-	var selectors []string
-
-	spiffeID = AgentID(pluginName, config.trustDomain.String(), report)
-	selectors = buildSelectorValues(report, attestation.Cert)
-	return stream.Send(&nodeattestorv1.AttestResponse{
-		Response: &nodeattestorv1.AttestResponse_AgentAttributes{
-			AgentAttributes: &nodeattestorv1.AgentAttributes{
-				SpiffeId:       spiffeID,
-				SelectorValues: selectors,
-				CanReattest:    true,
-			},
-		},
-	})
-}
-
 func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
+	
+	config, err := p.getConfig()
+	if err != nil {
+		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
+	}
+
 	req, err := stream.Recv()
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to receive attestation request: %v", err)
 	}
-
 	attestationType := req.GetPayload()
 
-	if bytes.Equal(attestationType, []byte("Attestation Azure")) {
-		return p.AttestTPM(stream)
+	var attestServer snp_attestation.AttestationServer
+	if bytes.Equal(attestationType, []byte("Azure")) {
+		attestServer = &snp_attestation.AttestAzure{}
+	} else if bytes.Equal(attestationType, []byte("SVSM")) {
+		attestServer = &snp_attestation.AttestSVSM{}
+	} else {
+		attestServer = &snp_attestation.AttestSNP{}
 	}
 
-	return p.AttestSNP(stream)
+	reportBytes, ek, err := attestServer.GetAttestationData(stream)  
+	if err != nil {
+		return err
+	}
+
+	err = snp_util.ValidateGuestReportSize(&reportBytes)
+	if err != nil {
+		return status.Errorf(codes.Internal, "invalid report size: %v", err)
+	}
+
+	signingKey := snp.GetSigningKey(&reportBytes)
+	err = p.validadeEndorsmentKey(ek, signingKey, config)
+	if err != nil {
+		return err
+	}
+
+	err = p.crlVerification(ek, signingKey, config)
+	if err != nil {
+		return err
+	}
+
+	valid := snp_util.ValidateGuestReportAgainstEK(&reportBytes, &ek)
+	if !valid {
+		return status.Errorf(codes.Internal, "unable to validate guest report against AMD EK")
+	}
+
+	report := snp_util.BuildAttestationReport(reportBytes)
+
+	var spiffeID string
+	var selectors []string
+
+	spiffeID = AgentID(pluginName, config.trustDomain.String(), report)
+	selectors = buildSelectorValues(report, ek)
+	err = stream.Send(&nodeattestorv1.AttestResponse{
+		Response: &nodeattestorv1.AttestResponse_AgentAttributes{
+			AgentAttributes: &nodeattestorv1.AgentAttributes{
+				SpiffeId:       spiffeID,
+				SelectorValues: selectors,
+				CanReattest:    true,
+			},
+		},
+	})
+
+	return err
+}
+
+func (p *Plugin) validadeEndorsmentKey(ek []byte, signingKey uint32, config *Config) error {
+	var valid = false
+	var err error
+	if signingKey == 0 {
+		valid, err = snp_util.ValidateEKCertChain(ek, config.VcekAMDCertChain)
+	} else {
+		valid, err = snp_util.ValidateEKCertChain(ek, config.VlekAMDCertChain)
+	}
+	if !valid {
+		return status.Errorf(codes.InvalidArgument, "unable to validate AMD EK with AMD cert chain: %v", err)
+	}
+
+	return err
+}
+
+func (p *Plugin) crlVerification(ek []byte, signingKey uint32, config *Config) error {
+	var err error
+	var caPath string
+	if signingKey == 0 {
+		caPath = config.VcekAMDCertChain
+	} else {
+		caPath = config.VlekAMDCertChain
+	}
+
+	if config.InsecureCRL {
+		p.logger.Warn("InsecureCRL enabled, skipping CRL verification")
+	} else {
+		err = snp_util.CheckRevocationList(ek, caPath, p.config.VcekCRLUrl, p.config.VlekCRLUrl, signingKey)
+		if err != nil {
+			if err.Error() == "warn using cache" {
+				p.logger.Warn("couldn't fetch CRL using the provided URL. Using cache")
+			} else {
+				return status.Errorf(codes.Aborted, "failed at CRL verification: %v", err)
+			}
+		}
+	}
+
+	return err
 }
 
 func AgentID(pluginName, trustDomain string, report snp.AttestationReport) string {
