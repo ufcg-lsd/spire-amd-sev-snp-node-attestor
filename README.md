@@ -27,6 +27,7 @@ NodeAttestor "amd_sev_snp" {
         vcek_crl_url = "<vcek_website_url>"
         vlek_crl_url = "<vlek_website_url>"
         insecure_crl = false
+        min_fw_version = "<hex_value>"
     }
 }
 ```
@@ -59,6 +60,7 @@ NodeAttestor "amd_sev_snp" {
     plugin_data {
         vlek_cert_chain = "/home/ubuntu/vlek_cert_chain.pem"
         vlek_crl_url = "https://kdsintf.amd.com/vlek/v1/Milan/crl"
+        min_fw_version = "0x12"
     }
 }
 ```
@@ -97,6 +99,7 @@ To check the complete list of selectors refer to [this documentation](./docs/sel
 | `amd_sev_snp:policy:migrate_ma:<bool>`                                | The guest policy. <br/> false: Association with a migration agent is disallowed. <br/> true: Association with a migration agent is allowed. |
 | `amd_sev_snp:policy:debug:<bool>`                                | The guest policy. <br/> false: Debugging is disallowed. <br/> true: Debugging is allowed. |
 | `amd_sev_snp:policy:single_socket:<bool>`                                | The guest policy. <br/> false: Guest can be activated on multiple sockets. <br/> false: Guest can be activated only on one socket. |
+| `amd_sev_snp:fw_version:updated` | If the current_tcb[SVN] >= min_fw_version value configured on server <br/> See [this docs](./FAQ.md#4---how-can-i-set-the-min_fw_version-on-server-conf) to learn how to set this value |
 
 ### Build and Test
 

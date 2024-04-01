@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"net/url"
 	"path"
@@ -41,6 +43,7 @@ type Config struct {
 	VcekCRLUrl       string `hcl:"vcek_crl_url"`
 	VlekCRLUrl       string `hcl:"vlek_crl_url"`
 	InsecureCRL      bool   `hcl:"insecure_crl"`
+	MinFWVersion     string `hcl:"min_fw_version"`
 }
 
 type Plugin struct {
@@ -60,7 +63,7 @@ func (p *Plugin) BrokerHostServices(broker pluginsdk.ServiceBroker) error {
 }
 
 func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
-	
+
 	config, err := p.getConfig()
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
@@ -81,7 +84,7 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 		attestServer = &snp_attestation.AttestSNP{}
 	}
 
-	reportBytes, ek, err := attestServer.GetAttestationData(stream)  
+	reportBytes, ek, err := attestServer.GetAttestationData(stream)
 	if err != nil {
 		return err
 	}
@@ -113,7 +116,7 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 	var selectors []string
 
 	spiffeID = AgentID(pluginName, config.trustDomain.String(), report)
-	selectors = buildSelectorValues(report, ek)
+	selectors = buildSelectorValues(report, ek, config)
 	err = stream.Send(&nodeattestorv1.AttestResponse{
 		Response: &nodeattestorv1.AttestResponse_AgentAttributes{
 			AgentAttributes: &nodeattestorv1.AgentAttributes{
@@ -202,7 +205,7 @@ func PrintByteArray(array []byte) string {
 	return str
 }
 
-func buildSelectorValues(report snp.AttestationReport, signing_key []byte) []string {
+func buildSelectorValues(report snp.AttestationReport, signing_key []byte, config *Config) []string {
 	selectorValues := []string{}
 
 	sha512EK := sha512.Sum512(signing_key)
@@ -210,6 +213,13 @@ func buildSelectorValues(report snp.AttestationReport, signing_key []byte) []str
 	policy := snp_util.BuildPolicy(report)
 	platforminfo := snp_util.BuildPlatformInfo(report)
 	flag := snp_util.BuildFlags(report)
+
+	if config.MinFWVersion != "" {
+		minFWVerion, _ := hex.DecodeString(config.MinFWVersion)
+		if report.CurrentTCB.SNP >= minFWVerion[0] {
+			selectorValues = append(selectorValues, "fw_version:updated")
+		}
+	}
 
 	selectorValues = append(selectorValues, "guest_svn:"+fmt.Sprintf("%d", report.GuestSVN))
 	selectorValues = append(selectorValues, "policy:abi_minor:"+fmt.Sprintf("%d", policy.ABI_MINOR))
@@ -272,6 +282,17 @@ func (p *Plugin) Configure(ctx context.Context, req *configv1.ConfigureRequest) 
 	}
 
 	config.trustDomain = trustDomain
+
+	if config.MinFWVersion != "" {
+		splittedValue := strings.Split(config.MinFWVersion, "x")
+		_, err := hex.DecodeString(splittedValue[1])
+
+		if err != nil {
+			return nil, err
+		}
+
+		config.MinFWVersion = splittedValue[1]
+	}
 
 	p.setConfig(config)
 	return &configv1.ConfigureResponse{}, nil
