@@ -1,12 +1,10 @@
 package snp
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/binary"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -22,17 +20,9 @@ func GenerateNonce(length uint8) []byte {
 }
 
 func GetSigningKey(report *[]byte) uint32 {
+	reportStruct := BuildExpandedAttestationReport(*report)
 
-	reportStruct := AttestationReport{}
-	binary.Read(bytes.NewBuffer(*report), binary.LittleEndian, &reportStruct)
-
-	SIGNIN_KEY_SHIFT := 0x02
-	SIGNIN_KEY_MASK := (uint32(0xff) << (SIGNIN_KEY_SHIFT))
-	flags := reportStruct.Flags
-	flagsStruct := Flags{}
-	flagsStruct.SIGNING_KEY = (flags & SIGNIN_KEY_MASK >> SIGNIN_KEY_SHIFT)
-
-	return flagsStruct.SIGNING_KEY
+	return reportStruct.Flags.SIGNING_KEY
 }
 
 func ExtractRSAPublicKey(tpmPub tpm2.Public) (*rsa.PublicKey, error) {
@@ -42,7 +32,7 @@ func ExtractRSAPublicKey(tpmPub tpm2.Public) (*rsa.PublicKey, error) {
 	}
 	rsaPublicKey, ok := rsaPubKey.(*rsa.PublicKey)
 	if !ok {
-		return nil, fmt.Errorf("The public key is not an RSA public key")
+		return nil, errors.New("the public key is not an RSA public key")
 	}
 	return rsaPublicKey, nil
 }

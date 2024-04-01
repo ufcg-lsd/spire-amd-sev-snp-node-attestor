@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"os"
-	snp "snp/common"
 	snputil "snp/agent/snp/snputil"
+	snp "snp/common"
 
 	"github.com/google/go-tpm/tpm2"
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/nodeattestor/v1"
@@ -15,9 +15,9 @@ import (
 
 type AttestSVSM struct{}
 
-func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAttestationServer, ekPath string) error{
+func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAttestationServer, ekPath string) error {
 	rwc, err := snputil.GetTPM()
-	if err != nil{
+	if err != nil {
 		return status.Errorf(codes.Internal, "can't open TPM at /dev/tpm0: %v", err)
 	}
 	defer rwc.Close()
@@ -36,25 +36,19 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 		return status.Errorf(codes.Internal, "unable to receive challenges: %v", err)
 	}
 
-	key, err := os.ReadFile(ekPath)
-
-	if err != nil {
-		return status.Errorf(codes.Internal, "unable to get VCEK/VLEK: %v", err)
-	}
-
-	report, err := snputil.GetReportFromTPMSVSM(rwc)
+	snpReport, _, err := snputil.GetReportFromTPM(rwc, snputil.SVSMOnPremiseSNPReportIndex)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to get report: %v", err)
 	}
 
-	ek, err := snputil.GetTPMEK(rwc)
+	tpmEK, err := snputil.GetTPMEK(rwc)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to get TPM EK: %v", err)
 	}
 
-	cryptoKey, err := ek.Key()
+	cryptoKey, err := tpmEK.Key()
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to get TPM EK PublicKey: %v", err)
@@ -74,13 +68,22 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 		return status.Errorf(codes.Internal, "unable to create TPM AIK: %v", err)
 	}
 
+	var snpEK []byte
+	if ekPath == "" {
+		snpEK, err = snputil.GetVCEKFromAMD(snp.BuildExpandedAttestationReport(snpReport))
+	} else {
+		snpEK, err = os.ReadFile(ekPath)
+	}
+	if err != nil {
+		return status.Errorf(codes.Internal, "unable to get VCEK/VLEK: %v", err)
+	}
+
 	registrationResponse, err := json.Marshal(snp.RegistrationRequestSVSM{
-		Report: report,
-		Cert:   key,
+		Report: snpReport,
+		Cert:   snpEK,
 		TPMEK:  encodedEK,
 		TPMAIK: aikPublicBlob,
 	})
-
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to marshal registration request: %v", err)
@@ -108,7 +111,7 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 		return status.Errorf(codes.Internal, "unable to unmarshal attestation request: %v", err)
 	}
 
-	session, _, err := tpm2.StartAuthSession(rwc,
+	tpmAuthSession, _, err := tpm2.StartAuthSession(rwc,
 		tpm2.HandleNull,
 		tpm2.HandleNull,
 		make([]byte, 16),
@@ -117,7 +120,7 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 		tpm2.AlgNull,
 		tpm2.AlgSHA256)
 
-	defer tpm2.FlushContext(rwc, session)
+	defer tpm2.FlushContext(rwc, tpmAuthSession)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to create auth session: %v", err)
@@ -128,14 +131,14 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 		Attributes: tpm2.AttrContinueSession,
 	}
 
-	if _, _, err := tpm2.PolicySecret(rwc, tpm2.HandleEndorsement, auth, session, nil, nil, nil, 0); err != nil {
+	if _, _, err := tpm2.PolicySecret(rwc, tpm2.HandleEndorsement, auth, tpmAuthSession, nil, nil, nil, 0); err != nil {
 		return status.Errorf(codes.Internal, "unable to create the policy secret: %v", err)
 	}
 
 	auths := []tpm2.AuthCommand{
 		auth,
 		{
-			Session:    session,
+			Session:    tpmAuthSession,
 			Attributes: tpm2.AttrContinueSession,
 		},
 	}
@@ -153,7 +156,6 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 	}
 
 	nonce := sha256.Sum256(attestationRequest.Nonce)
-
 
 	quote, sig, err := snputil.GetQuoteTPM(rwc, nonce, aikHandle)
 	if err != nil {
@@ -185,4 +187,3 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 	return nil
 
 }
-

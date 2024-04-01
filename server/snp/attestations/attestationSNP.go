@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	snp "snp/common"
-	snp_util "snp/server/snp/snputil"
 
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
 	"google.golang.org/grpc/codes"
@@ -42,7 +41,7 @@ func (a *AttestSNP) GetAttestationData(stream nodeattestorv1.NodeAttestor_Attest
 		return nil, nil, status.Errorf(codes.Internal, "unable to unmarshal challenge response: %v", err)
 	}
 
-	report := snp_util.BuildAttestationReport(attestation.Report)
+	report := snp.BuildExpandedAttestationReport(attestation.Report)
 
 	sha512Nonce := sha512.Sum512(nonce)
 	if report.ReportData != sha512Nonce {
