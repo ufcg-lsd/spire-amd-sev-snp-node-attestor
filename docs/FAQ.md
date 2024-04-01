@@ -25,3 +25,15 @@ Some CVM instances do not load the EK in the AMD-SP cache in a non-deterministic
 #### 3 - Why does the cert chain check fail against my VCEK/VLEK?
 
 You need to be sure that your machine has a VCEK or VLEK. It is possible to get machines with different EK types on the same cloud provider, so you must check if you need to load a VCEK or a VLEK on the plugin configuration.
+
+#### 4 - How can I set the min_fw_version on server conf?
+
+The `min_fw_version` config on the server side defines which firmware version your server will consider updated. For instance, if you set it to `0x14`, every agent running on a node with firmware version greater than or equal to `0x14` will receive the selector `amd_sev_snp:fw_version:updated`. Otherwise, it will not receive any value.
+
+To know which version to configure, you can go to [AMD's website](https://www.amd.com/pt/developer/sev.html), search for `Links & Downloads` section, and download the `SEV Firmware` correspondent to your EPYC processor (Milan | Rome | Genoa | Naples).
+
+![amd_website_fw_downloads](./amd_website_fw_downloads.png "amd_website_fw_downloads")
+
+After downloading it, you can extract the files and open the `<VERSION> Release Notes.txt` file. It will contain the release notes of the processor firmware. There you can see the versions and related security issues. To set the selector, you must use the `SPL` value of the firmware version.
+
+![snp_fw_release_notes](./snp_fw_release_notes.png "snp_fw_release_notes")

@@ -49,3 +49,4 @@ The complete list of selectors and their descriptions is presented below.
 | `amd_sev_snp:launch_tcb:snp:<int>`                                | Version of the SNP firmware. Security Version Number (SVN) of SNP firmware |
 | `amd_sev_snp:launch_tcb:microcode:<int>`                             | Lowest current patch level of all cores. |
 | `amd_sev_snp:signing_key_hash:<string>`  | The SIGNING_KEY SHA512. |
+| `amd_sev_snp:fw_version:updated` | If the current_tcb[SVN] >= min_fw_version value configured on server <br/> See [this docs](./FAQ.md#4---how-can-i-set-the-min_fw_version-on-server-conf) to learn how to set this value |
