@@ -11,36 +11,36 @@ import (
 )
 
 const (
-	snpReportIndex           tpmutil.Handle = 0x01400001
-	svsmOnPremiseReportIndex tpmutil.Handle = 0x1C00002
-	tpmAuthHandle            tpmutil.Handle = 0x40000001
-	tpmEKHandle              tpmutil.Handle = 0x81010001
-	prefixZeros              int16          = 32
+	AzureSNPReportIndex         tpmutil.Handle = 0x01400001
+	TPMAkHandle                 tpmutil.Handle = 0x81000003
+	TPMAuthHandle               tpmutil.Handle = 0x40000001
+	SVSMOnPremiseSNPReportIndex tpmutil.Handle = 0x1C00002
+	tpmEKHandle                 tpmutil.Handle = 0x81010001
+	prefixZeros                 int16          = 32
 )
 
-var tpmInstance io.ReadWriteCloser
-
 func GetTPM() (io.ReadWriteCloser, error) {
-
 	rwc, err := tpm2.OpenTPM("/dev/tpm0")
 	if err != nil {
 		return nil, err
 	}
 
-	tpmInstance = rwc
-	return tpmInstance, nil
+	return rwc, nil
 }
 
-func GetReportTPM(rwc io.ReadWriteCloser) ([]byte, []byte, error) {
+func GetReportFromTPM(rwc io.ReadWriteCloser, reportIndex tpmutil.Handle) ([]byte, []byte, error) {
+	var tpmReport []byte
+	var snpReport []byte
+	var err error
 
-	initReport, err := tpm2.NVReadEx(rwc, snpReportIndex, tpmAuthHandle, "", 0)
-	if err != nil {
-		return nil, nil, err
+	if reportIndex == AzureSNPReportIndex {
+		tpmReport, err = tpm2.NVReadEx(rwc, reportIndex, TPMAuthHandle, "", 0)
+		snpReport = tpmReport[prefixZeros : prefixZeros+1184]
+	} else {
+		snpReport, err = tpm2.NVReadEx(rwc, reportIndex, TPMAuthHandle, "", 0)
 	}
 
-	reportBin := initReport[prefixZeros : prefixZeros+1184]
-
-	return reportBin, initReport, nil
+	return snpReport, tpmReport, err
 }
 
 func GetRuntimeData(initReport []byte) ([]byte, error) {
@@ -88,14 +88,6 @@ func GetAK(rwc io.ReadWriteCloser, handle tpmutil.Handle) ([]byte, error) {
 	pemBytes := snp.EncodePublicKeyToPEM(rsaPubKey)
 
 	return pemBytes, nil
-}
-
-func GetReportFromTPMSVSM(rwc io.ReadWriteCloser) ([]byte, error) {
-	report, err := tpm2.NVReadEx(rwc, svsmOnPremiseReportIndex, tpmAuthHandle, "", 0)
-	if err != nil {
-		return nil, fmt.Errorf("tpm2.NVReadEx failed: %w", err)
-	}
-	return report, nil
 }
 
 func GetTPMEK(rwc io.ReadWriteCloser) (tpm2.Public, error) {
@@ -205,6 +197,6 @@ func VerifyAzure() bool {
 	rwc, _ := GetTPM()
 	defer rwc.Close()
 
-	_, err := tpm2.NVReadEx(rwc, snpReportIndex, tpmAuthHandle, "", 0)
+	_, err := tpm2.NVReadEx(rwc, AzureSNPReportIndex, TPMAuthHandle, "", 0)
 	return err == nil
 }

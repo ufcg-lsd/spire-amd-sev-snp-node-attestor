@@ -7,18 +7,16 @@ import (
 	snputil "snp/agent/snp/snputil"
 	snp "snp/common"
 
-	"github.com/google/go-tpm/tpmutil"
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/nodeattestor/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-const tpmAkHandle tpmutil.Handle = 0x81000003
 
 type AttestAzure struct{}
 
-func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAttestationServer, ekPath string) error{
+func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAttestationServer, ekPath string) error {
 	rwc, err := snputil.GetTPM()
-	if err != nil{
+	if err != nil {
 		return status.Errorf(codes.Internal, "can't open TPM at /dev/tpm0: %v", err)
 	}
 	defer rwc.Close()
@@ -39,39 +37,39 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidA
 
 	nonce := sha256.Sum256(challenge.Challenge)
 
-	report, initReport, err := snputil.GetReportTPM(rwc)
+	snpReport, tpmReport, err := snputil.GetReportFromTPM(rwc, snputil.AzureSNPReportIndex)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to get report: %v", err)
 	}
 
-	var key []byte
-
+	var snpEK []byte
 	if ekPath == "" {
-		key, err = snputil.GetVCEK()
+		snpEK, err = snputil.GetVCEKFromAMD(snp.BuildExpandedAttestationReport(snpReport))
 	} else {
-		key, err = os.ReadFile(ekPath)
+		snpEK, err = os.ReadFile(ekPath)
 	}
+
 	if err != nil {
 		return status.Errorf(codes.Internal, "Error: %v", err)
 	}
 
-	ak, err := snputil.GetAK(rwc, tpmAkHandle)
+	tpmAK, err := snputil.GetAK(rwc, snputil.TPMAkHandle)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "error trying to get AK: %v", err)
 	}
 
-	runtimeData, err := snputil.GetRuntimeData(initReport)
+	runtimeData, err := snputil.GetRuntimeData(tpmReport)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "error fetching runtime data: %v", err)
 	}
 
 	attestationData, err := json.Marshal(snp.AttestationRequestAzure{
-		Report:      report,
-		Cert:        key,
-		TPMCert:     ak,
+		Report:      snpReport,
+		Cert:        snpEK,
+		TPMCert:     tpmAK,
 		RuntimeData: runtimeData,
 	})
 
@@ -89,7 +87,7 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidA
 		return status.Errorf(codes.Internal, "unable to send challenge response: %s", err)
 	}
 
-	quote, sig, err := snputil.GetQuoteTPM(rwc, nonce, tpmAkHandle)
+	quote, sig, err := snputil.GetQuoteTPM(rwc, nonce, snputil.TPMAkHandle)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "error fetching tpm quote: %v", err)

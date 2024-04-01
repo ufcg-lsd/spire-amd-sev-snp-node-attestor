@@ -46,6 +46,9 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_Atte
 			Challenge: str,
 		},
 	})
+	if err != nil {
+		return nil, nil, status.Errorf(status.Code(err), "unable to receive quote: %v", err)
+	}
 
 	quote, err := stream.Recv()
 

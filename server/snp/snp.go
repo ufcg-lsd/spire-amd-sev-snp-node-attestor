@@ -110,7 +110,7 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 		return status.Errorf(codes.Internal, "unable to validate guest report against AMD EK")
 	}
 
-	report := snp_util.BuildAttestationReport(reportBytes)
+	report := snp.BuildExpandedAttestationReport(reportBytes)
 
 	var spiffeID string
 	var selectors []string
@@ -170,7 +170,7 @@ func (p *Plugin) crlVerification(ek []byte, signingKey uint32, config *Config) e
 	return err
 }
 
-func AgentID(pluginName, trustDomain string, report snp.AttestationReport) string {
+func AgentID(pluginName, trustDomain string, report snp.AttestationReportExpanded) string {
 	chipId := report.ChipId[:10]
 	measurement := report.Measurement[:10]
 	reportId := report.ReportId[:10]
@@ -205,14 +205,11 @@ func PrintByteArray(array []byte) string {
 	return str
 }
 
-func buildSelectorValues(report snp.AttestationReport, signing_key []byte, config *Config) []string {
+func buildSelectorValues(report snp.AttestationReportExpanded, signing_key []byte) []string {
 	selectorValues := []string{}
 
 	sha512EK := sha512.Sum512(signing_key)
 	measurement := report.Measurement[:]
-	policy := snp_util.BuildPolicy(report)
-	platforminfo := snp_util.BuildPlatformInfo(report)
-	flag := snp_util.BuildFlags(report)
 
 	if config.MinFWVersion != "" {
 		minFWVerion, _ := hex.DecodeString(config.MinFWVersion)
@@ -222,12 +219,12 @@ func buildSelectorValues(report snp.AttestationReport, signing_key []byte, confi
 	}
 
 	selectorValues = append(selectorValues, "guest_svn:"+fmt.Sprintf("%d", report.GuestSVN))
-	selectorValues = append(selectorValues, "policy:abi_minor:"+fmt.Sprintf("%d", policy.ABI_MINOR))
-	selectorValues = append(selectorValues, "policy:abi_major:"+fmt.Sprintf("%d", policy.ABI_MAJOR))
-	selectorValues = append(selectorValues, "policy:smt:"+fmt.Sprintf("%t", policy.SMT_ALLOWED))
-	selectorValues = append(selectorValues, "policy:migrate_ma:"+fmt.Sprintf("%t", policy.MIGRATE_MA_ALLOWED))
-	selectorValues = append(selectorValues, "policy:debug:"+fmt.Sprintf("%t", policy.DEBUG_ALLOWED))
-	selectorValues = append(selectorValues, "policy:single_socket:"+fmt.Sprintf("%t", policy.SINGLE_SOCKET_ALLOWED))
+	selectorValues = append(selectorValues, "policy:abi_minor:"+fmt.Sprintf("%d", report.Policy.ABI_MINOR))
+	selectorValues = append(selectorValues, "policy:abi_major:"+fmt.Sprintf("%d", report.Policy.ABI_MAJOR))
+	selectorValues = append(selectorValues, "policy:smt:"+fmt.Sprintf("%t", report.Policy.SMT_ALLOWED))
+	selectorValues = append(selectorValues, "policy:migrate_ma:"+fmt.Sprintf("%t", report.Policy.MIGRATE_MA_ALLOWED))
+	selectorValues = append(selectorValues, "policy:debug:"+fmt.Sprintf("%t", report.Policy.DEBUG_ALLOWED))
+	selectorValues = append(selectorValues, "policy:single_socket:"+fmt.Sprintf("%t", report.Policy.SINGLE_SOCKET_ALLOWED))
 	selectorValues = append(selectorValues, "family_id:"+PrintByteArray(report.FamilyId[:]))
 	selectorValues = append(selectorValues, "image_id:"+PrintByteArray(report.ImageId[:]))
 	selectorValues = append(selectorValues, "vmpl:"+fmt.Sprintf("%d", report.VMPL))
@@ -236,11 +233,14 @@ func buildSelectorValues(report snp.AttestationReport, signing_key []byte, confi
 	selectorValues = append(selectorValues, "current_tcb:tee:"+fmt.Sprintf("%d", report.CurrentTCB.TEE))
 	selectorValues = append(selectorValues, "current_tcb:snp:"+fmt.Sprintf("%d", report.CurrentTCB.SNP))
 	selectorValues = append(selectorValues, "current_tcb:microcode:"+fmt.Sprintf("%d", report.CurrentTCB.Microcode))
-	selectorValues = append(selectorValues, "platform_info:smt_en:"+fmt.Sprintf("%t", platforminfo.SMT_EN))
-	selectorValues = append(selectorValues, "platform_info:tsme_en:"+fmt.Sprintf("%t", platforminfo.TSME_EN))
-	selectorValues = append(selectorValues, "signing_key:"+fmt.Sprintf("%d", flag.SIGNING_KEY))
-	selectorValues = append(selectorValues, "mask_chip_key:"+fmt.Sprintf("%t", flag.MASK_CHIP_KEY))
-	selectorValues = append(selectorValues, "author_key_en:"+fmt.Sprintf("%t", flag.AUTHOR_KEY_EN))
+	selectorValues = append(selectorValues, "platform_info:smt_en:"+fmt.Sprintf("%t", report.PlatformInfo.SMT_EN))
+	selectorValues = append(selectorValues, "platform_info:tsme_en:"+fmt.Sprintf("%t", report.PlatformInfo.TSME_EN))
+	selectorValues = append(selectorValues, "platform_info:ciphertext_hiding_en:"+fmt.Sprintf("%t", report.PlatformInfo.CIPHERTEXT_HIDING_EN))
+	selectorValues = append(selectorValues, "platform_info:ecc_en:"+fmt.Sprintf("%t", report.PlatformInfo.ECC_EN))
+	selectorValues = append(selectorValues, "platform_info:rapl_dis:"+fmt.Sprintf("%t", report.PlatformInfo.RAPL_DIS))
+	selectorValues = append(selectorValues, "signing_key:"+fmt.Sprintf("%d", report.Flags.SIGNING_KEY))
+	selectorValues = append(selectorValues, "mask_chip_key:"+fmt.Sprintf("%t", report.Flags.MASK_CHIP_KEY))
+	selectorValues = append(selectorValues, "author_key_en:"+fmt.Sprintf("%t", report.Flags.AUTHOR_KEY_EN))
 	selectorValues = append(selectorValues, "measurement:"+PrintByteArray(measurement[:]))
 	selectorValues = append(selectorValues, "host_data:"+PrintByteArray(report.HostData[:]))
 	selectorValues = append(selectorValues, "id_key_digest:"+PrintByteArray(report.IdKeyDigest[:]))
