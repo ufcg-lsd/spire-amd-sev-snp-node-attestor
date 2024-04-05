@@ -205,7 +205,7 @@ func PrintByteArray(array []byte) string {
 	return str
 }
 
-func buildSelectorValues(report snp.AttestationReportExpanded, signing_key []byte) []string {
+func buildSelectorValues(report snp.AttestationReportExpanded, signing_key []byte, config *Config) []string {
 	selectorValues := []string{}
 
 	sha512EK := sha512.Sum512(signing_key)
