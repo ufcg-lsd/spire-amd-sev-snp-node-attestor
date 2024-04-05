@@ -16,6 +16,7 @@ const (
 	TPMAuthHandle               tpmutil.Handle = 0x40000001
 	SVSMOnPremiseSNPReportIndex tpmutil.Handle = 0x1C00002
 	tpmEKHandle                 tpmutil.Handle = 0x81010001
+	tpmAIKHandle                tpmutil.Handle = tpmutil.Handle(tpm2.TransientFirst + 0x1)
 	prefixZeros                 int16          = 32
 )
 
@@ -100,6 +101,22 @@ func GetTPMEK(rwc io.ReadWriteCloser) (tpm2.Public, error) {
 	tpm2.FlushContext(rwc, snp.HandleEndorsement)
 
 	return ek, err
+}
+
+func GetAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
+
+	aik, _, _, err := tpm2.ReadPublic(rwc, tpmAIKHandle)
+	if err != nil {
+		return 0, []byte{}, err
+	}
+
+	aikBlob, err := aik.Encode()
+
+	if err != nil {
+		return 0, []byte{}, err
+	}
+
+	return tpmAIKHandle, aikBlob, nil
 }
 
 func CreateTPMAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
@@ -190,6 +207,55 @@ func CreateTPMAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
 	}
 
 	return aikHandle, publicBlob, nil
+}
+
+func GetChallengeSecret(rwc io.ReadWriteCloser, attestationRequest *snp.AttestationRequestSVSM, aikHandle tpmutil.Handle) ([]byte, error) {
+
+	session, _, err := tpm2.StartAuthSession(rwc,
+		tpm2.HandleNull,
+		tpm2.HandleNull,
+		make([]byte, 16),
+		nil,
+		tpm2.SessionPolicy,
+		tpm2.AlgNull,
+		tpm2.AlgSHA256)
+
+	defer tpm2.FlushContext(rwc, session)
+
+	if err != nil {
+		return nil, fmt.Errorf("tpm2.StartAuthSession failed: %v", err)
+	}
+
+	auth := tpm2.AuthCommand{
+		Session:    tpm2.HandlePasswordSession,
+		Attributes: tpm2.AttrContinueSession,
+	}
+
+	if _, _, err := tpm2.PolicySecret(rwc, tpm2.HandleEndorsement, auth, session, nil, nil, nil, 0); err != nil {
+		return nil, fmt.Errorf("tpm2.PolicySecret failed: %v", err)
+	}
+
+	auths := []tpm2.AuthCommand{
+		auth,
+		{
+			Session:    session,
+			Attributes: tpm2.AttrContinueSession,
+		},
+	}
+
+	secret, err := tpm2.ActivateCredentialUsingAuth(
+		rwc,
+		auths,
+		aikHandle,
+		snp.HandleEndorsement,
+		attestationRequest.Challenge.CredBlob,
+		attestationRequest.Challenge.Secret)
+
+	if err != nil {
+		return nil, fmt.Errorf("tpm2.ActivateCredentialUsingAuth failed: %v", err)
+	}
+
+	return secret, nil
 }
 
 func VerifyAzure() bool {
