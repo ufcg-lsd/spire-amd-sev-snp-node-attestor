@@ -7,7 +7,7 @@ import (
 	snputil "snp/agent/snp/snputil"
 	snp "snp/common"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/tpmutil"
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/nodeattestor/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -60,12 +60,16 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 		return status.Errorf(codes.Internal, "unable to encode TPM EK: %v", err)
 	}
 
-	aikHandle, aikPublicBlob, err := snputil.CreateTPMAIK(rwc)
+	var aikPublicBlob []byte
+	var aikHandle tpmutil.Handle
 
-	defer tpm2.FlushContext(rwc, aikHandle)
+	aikHandle, aikPublicBlob, err = snputil.GetAIK(rwc)
 
 	if err != nil {
-		return status.Errorf(codes.Internal, "unable to create TPM AIK: %v", err)
+		aikHandle, aikPublicBlob, err = snputil.CreateTPMAIK(rwc)
+		if err != nil {
+			return status.Errorf(codes.Internal, "unable to create TPM AIK: %v", err)
+		}
 	}
 
 	var snpEK []byte
@@ -111,48 +115,10 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 		return status.Errorf(codes.Internal, "unable to unmarshal attestation request: %v", err)
 	}
 
-	tpmAuthSession, _, err := tpm2.StartAuthSession(rwc,
-		tpm2.HandleNull,
-		tpm2.HandleNull,
-		make([]byte, 16),
-		nil,
-		tpm2.SessionPolicy,
-		tpm2.AlgNull,
-		tpm2.AlgSHA256)
-
-	defer tpm2.FlushContext(rwc, tpmAuthSession)
+	secret, err := snputil.GetChallengeSecret(rwc, attestationRequest, aikHandle)
 
 	if err != nil {
-		return status.Errorf(codes.Internal, "unable to create auth session: %v", err)
-	}
-
-	auth := tpm2.AuthCommand{
-		Session:    tpm2.HandlePasswordSession,
-		Attributes: tpm2.AttrContinueSession,
-	}
-
-	if _, _, err := tpm2.PolicySecret(rwc, tpm2.HandleEndorsement, auth, tpmAuthSession, nil, nil, nil, 0); err != nil {
-		return status.Errorf(codes.Internal, "unable to create the policy secret: %v", err)
-	}
-
-	auths := []tpm2.AuthCommand{
-		auth,
-		{
-			Session:    tpmAuthSession,
-			Attributes: tpm2.AttrContinueSession,
-		},
-	}
-
-	secret, err := tpm2.ActivateCredentialUsingAuth(
-		rwc,
-		auths,
-		aikHandle,
-		snp.HandleEndorsement,
-		attestationRequest.Challenge.CredBlob,
-		attestationRequest.Challenge.Secret)
-
-	if err != nil {
-		return status.Errorf(codes.Internal, "unable to ActivateCredentialUsingAuth: %v", err)
+		return status.Errorf(codes.Internal, "unable to get secret from challenge: %v", err)
 	}
 
 	nonce := sha256.Sum256(attestationRequest.Nonce)
