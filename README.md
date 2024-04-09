@@ -22,18 +22,16 @@ spiffe://<trust-domain>/spire/agent/amd_sev_snp/chip_id/<truncated_chip_id>/meas
 NodeAttestor "amd_sev_snp" {
     plugin_cmd = "<path/to/plugin_binary>"
     plugin_data {
-        vcek_cert_chain = "<path/to/vcek_cert_chain>"
-        vlek_cert_chain = "<path/to/vlek_cert_chain>"
-        vcek_crl_url = "<vcek_website_url>"
-        vlek_crl_url = "<vlek_website_url>"
+        cert_chains = ["<path/to/cert_chain1>", "<path/to/cert_chain2>"]
+        crl_urls = ["<vcek_website_url1>", "<vcek_website_url2>"]
         insecure_crl = false
         min_fw_version = "<hex_value>"
     }
 }
 ```
 
-The `vcek_cert_chain` and `vlek_cert_chain` fields refer to the ASK/ARK certificates chain provided by AMD.
-To get these cert chains you can use the commands below:
+The `cert_chains` field refers to the ASK/ARK certificates chain provided by AMD.
+To get these cert chains for Milan processors you can use the commands below:
 
 ```bash
 # VLEK
@@ -42,7 +40,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://kdsintf.amd.com/vlek/v1/Milan/cert_
 curl --proto '=https' --tlsv1.2 -sSf https://kdsintf.amd.com/vcek/v1/Milan/cert_chain -o vcek_cert_chain.pem
 ```
 
-The `vcek_crl_url` and `vcek_crl_url` fields refer to ways of obtaining the Certificate Revocation List (CRL). With this configuration set, you guarantee that it will not be possible to use a certificate revoked by the issuing entity. To replace the url parameter you can use one of the URLs below:
+The `crl_urls` field refers to ways of obtaining the Certificate Revocation List (CRL). With this configuration set, you guarantee that it will not be possible to use a certificate revoked by the issuing entity. To replace the url parameter you can use one of the URLs below:
+
 ```bash
 # VLEK
 https://kdsintf.amd.com/vlek/v1/Milan/crl
@@ -58,8 +57,14 @@ A sample configuration:
 NodeAttestor "amd_sev_snp" {
     plugin_cmd = "/home/ubuntu/snp-server-plugin"
     plugin_data {
-        vlek_cert_chain = "/home/ubuntu/vlek_cert_chain.pem"
-        vlek_crl_url = "https://kdsintf.amd.com/vlek/v1/Milan/crl"
+        cert_chains = [
+            "/home/ubuntu/vlek_cert_chain.pem",
+            "/home/ubuntu/vcek_cert_chain.pem"
+            ]
+        crl_urls = [
+            "https://kdsintf.amd.com/vlek/v1/Milan/crl",
+            "https://kdsintf.amd.com/vcek/v1/Milan/crl"
+            ]
         min_fw_version = "0x12"
     }
 }

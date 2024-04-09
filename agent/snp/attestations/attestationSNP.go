@@ -87,7 +87,6 @@ func (a *AttestSNP) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAtt
 }
 
 func getChipKey(certificateTable []byte, report []byte, ekPath string) ([]byte, error) {
-
 	var err error
 	var ek []byte
 	signingKey := snp.GetSigningKey(&report)
