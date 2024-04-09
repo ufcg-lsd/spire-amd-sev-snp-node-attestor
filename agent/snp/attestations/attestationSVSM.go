@@ -7,7 +7,7 @@ import (
 	snputil "snp/agent/snp/snputil"
 	snp "snp/common"
 
-	"github.com/google/go-tpm/tpmutil"
+	"github.com/google/go-tpm/tpm2"
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/nodeattestor/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
