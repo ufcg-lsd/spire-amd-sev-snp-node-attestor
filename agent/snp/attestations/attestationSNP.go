@@ -16,9 +16,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
 type AttestSNP struct{}
 
-func (a *AttestSNP) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAttestationServer, ekPath string) error{
+func (a *AttestSNP) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAttestationServer, ekPath string) error {
 	err := stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
 		Data: &nodeattestorv1.PayloadOrChallengeResponse_Payload{
 			Payload: []byte("SNP"),
@@ -85,13 +86,11 @@ func (a *AttestSNP) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAtt
 	return nil
 }
 
-
 func getChipKey(certificateTable []byte, report []byte, ekPath string) ([]byte, error) {
 
 	var err error
 	var ek []byte
 	signingKey := snp.GetSigningKey(&report)
-
 
 	if ekPath != "" {
 		ek, err = os.ReadFile(ekPath)
@@ -105,20 +104,21 @@ func getChipKey(certificateTable []byte, report []byte, ekPath string) ([]byte, 
 			return nil, err
 		}
 
+		var ekGUID string
+
 		if signingKey == 0 {
-			ek, err = certs.GetByGUIDString(abi.VcekGUID)
-
-			if err != nil {
-				return nil, err
-			}
+			ekGUID = abi.VcekGUID
 		} else {
-			ek, _ = certs.GetByGUIDString(abi.VlekGUID)
+			ekGUID = abi.VlekGUID
+		}
 
-			tmp, err := x509.ParseCertificate(ek)
-			if err != nil {
-				return nil, err
-			}
+		ek, err = certs.GetByGUIDString(ekGUID)
+		if err != nil {
+			return nil, err
+		}
 
+		tmp, err := x509.ParseCertificate(ek)
+		if err == nil {
 			pemBlock := &pem.Block{
 				Type:  "CERTIFICATE",
 				Bytes: tmp.Raw,
