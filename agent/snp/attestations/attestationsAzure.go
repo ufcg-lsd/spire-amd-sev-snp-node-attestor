@@ -54,7 +54,7 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidA
 		return status.Errorf(codes.Internal, "Error: %v", err)
 	}
 
-	tpmAK, err := snputil.GetAK(rwc, snputil.TPMAkHandle)
+	akPublicBlob, err := snputil.GetAK(rwc)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "error trying to get AK: %v", err)
@@ -69,7 +69,7 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidA
 	attestationData, err := json.Marshal(snp.AttestationRequestAzure{
 		Report:      snpReport,
 		Cert:        snpEK,
-		TPMCert:     tpmAK,
+		TPMAK:       akPublicBlob,
 		RuntimeData: runtimeData,
 	})
 
@@ -87,7 +87,7 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidA
 		return status.Errorf(codes.Internal, "unable to send challenge response: %s", err)
 	}
 
-	quote, sig, err := snputil.GetQuoteTPM(rwc, nonce, snputil.TPMAkHandle)
+	quote, sig, err := snputil.GetQuoteTPM(rwc, nonce)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "error fetching tpm quote: %v", err)

@@ -32,15 +32,15 @@ func ExtractRSAPublicKey(tpmPub tpm2.Public) (*rsa.PublicKey, error) {
 	}
 	rsaPublicKey, ok := rsaPubKey.(*rsa.PublicKey)
 	if !ok {
-		return nil, errors.New("the public key is not an RSA public key")
+		return nil, fmt.Errorf("The public key is not an RSA public key")
 	}
 	return rsaPublicKey, nil
 }
 
-func EncodePublicKeyToPEM(pub *rsa.PublicKey) []byte {
+func EncodePublicKeyToPEM(pub *rsa.PublicKey) ([]byte, error) {
 	pubDER, err := x509.MarshalPKIXPublicKey(pub)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	pemBlock := &pem.Block{
@@ -49,7 +49,7 @@ func EncodePublicKeyToPEM(pub *rsa.PublicKey) []byte {
 	}
 
 	pemBytes := pem.EncodeToMemory(pemBlock)
-	return pemBytes
+	return pemBytes, nil
 }
 
 func EncodeEK(pub crypto.PublicKey) ([]byte, error) {

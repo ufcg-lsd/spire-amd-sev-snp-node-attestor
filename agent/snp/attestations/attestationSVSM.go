@@ -16,11 +16,18 @@ import (
 type AttestSVSM struct{}
 
 func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAttestationServer, ekPath string) error {
+
 	rwc, err := snputil.GetTPM()
 	if err != nil {
 		return status.Errorf(codes.Internal, "can't open TPM at /dev/tpm0: %v", err)
 	}
 	defer rwc.Close()
+
+	err = snputil.FlushContextAll(rwc, tpm2.HandleTypeTransient)
+
+	if err != nil {
+		return status.Errorf(codes.Internal, "unable to flush all transient context: %v", err)
+	}
 
 	err = stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
 		Data: &nodeattestorv1.PayloadOrChallengeResponse_Payload{
@@ -54,21 +61,21 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 		return status.Errorf(codes.Internal, "unable to get TPM EK PublicKey: %v", err)
 	}
 
-	encodedEK, err := snp.EncodeEK(cryptoKey)
+	ekPubEncoded, err := snp.EncodeEK(cryptoKey)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to encode TPM EK: %v", err)
 	}
 
-	var aikPublicBlob []byte
-	var aikHandle tpmutil.Handle
+	var akPublicBlob []byte
 
-	aikHandle, aikPublicBlob, err = snputil.GetAIK(rwc)
+	akPublicBlob, err = snputil.GetAK(rwc)
 
 	if err != nil {
-		aikHandle, aikPublicBlob, err = snputil.CreateTPMAIK(rwc)
+		akPublicBlob, err = snputil.CreateTPMAK(rwc)
+
 		if err != nil {
-			return status.Errorf(codes.Internal, "unable to create TPM AIK: %v", err)
+			return status.Errorf(codes.Internal, "unable to create TPM AK: %v", err)
 		}
 	}
 
@@ -85,8 +92,8 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 	registrationResponse, err := json.Marshal(snp.RegistrationRequestSVSM{
 		Report: snpReport,
 		Cert:   snpEK,
-		TPMEK:  encodedEK,
-		TPMAIK: aikPublicBlob,
+		TPMEK:  ekPubEncoded,
+		TPMAK:  akPublicBlob,
 	})
 
 	if err != nil {
@@ -115,7 +122,7 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 		return status.Errorf(codes.Internal, "unable to unmarshal attestation request: %v", err)
 	}
 
-	secret, err := snputil.GetChallengeSecret(rwc, attestationRequest, aikHandle)
+	secret, err := snputil.GetChallengeSecret(rwc, attestationRequest)
 
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to get secret from challenge: %v", err)
@@ -123,7 +130,7 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 
 	nonce := sha256.Sum256(attestationRequest.Nonce)
 
-	quote, sig, err := snputil.GetQuoteTPM(rwc, nonce, aikHandle)
+	quote, sig, err := snputil.GetQuoteTPM(rwc, nonce)
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to create Quote: %v", err)
 	}
