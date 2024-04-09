@@ -7,10 +7,43 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 )
 
-var crlVcekCache *x509.RevocationList
-var crlVlekCache *x509.RevocationList
+type CRLCacheEntry struct {
+	crl        *x509.RevocationList
+	url        string
+	lastUpdate time.Time
+}
+
+type CRLCache struct {
+	entries map[string]*CRLCacheEntry
+	mutex   sync.RWMutex
+}
+
+var crlCache = CRLCache{
+	entries: make(map[string]*CRLCacheEntry),
+	mutex:   sync.RWMutex{},
+}
+
+func (crlCache *CRLCache) GetEntry(url string) *CRLCacheEntry {
+	crlCache.mutex.Lock()
+	crlCached := crlCache.entries[url]
+	crlCache.mutex.Unlock()
+
+	return crlCached
+}
+
+func (crlCache *CRLCache) AddEntry(url string, crl *x509.RevocationList) {
+	crlCache.mutex.Lock()
+	crlCache.entries[url] = &CRLCacheEntry{
+		crl:        crl,
+		url:        url,
+		lastUpdate: time.Now(),
+	}
+	crlCache.mutex.Unlock()
+}
 
 func CheckCRLSignature(crl *x509.RevocationList, caPath string) (bool, error) {
 	caBytes, err := os.ReadFile(caPath)
@@ -57,50 +90,46 @@ func GetCRLByURL(crlUrl string) (*x509.RevocationList, error) {
 	return crl, err
 }
 
-func ObtainCRL(crlUrl string, crlCache **x509.RevocationList) (*x509.RevocationList, error){
+func ObtainCRL(crlUrl string) (*x509.RevocationList, error) {
 	var crl *x509.RevocationList
 	var err error
 
-	crl, err = GetCRLByURL(crlUrl)
-	if err != nil{
-		if crlCache != nil{
-			crl = *crlCache
-			err = errors.New("warn using cache")
-		} 
+	crlCached := crlCache.GetEntry(crlUrl)
+
+	if crlCached == nil || time.Since(crlCached.lastUpdate) > 15*time.Minute {
+		crl, err = GetCRLByURL(crlUrl)
+		crlCache.AddEntry(crlUrl, crl)
 	} else {
-		*crlCache = crl
+		crl = crlCached.crl
 	}
 
 	return crl, err
 }
 
-func CheckRevocationList(ek []byte, caPath string, vcekCRLUrl string, vlekCRLUrl string, signingKey uint32) (error) {
-
+func IsCertRevoked(ek []byte, caPath string, CRLUrl string) (bool, error) {
 	var crl *x509.RevocationList
 	var err error
-	var errFetchCRL error
+	isRevoked := false
 
-	if signingKey == 0{
-		crl, errFetchCRL = ObtainCRL(vcekCRLUrl, &crlVcekCache)	
-	} else {
-		crl, errFetchCRL = ObtainCRL(vlekCRLUrl, &crlVlekCache)
+	crl, _ = ObtainCRL(CRLUrl)
+
+	if crl == nil {
+		return isRevoked, errors.New("couldn't fetch CRL using the provided URL and cache is empty")
 	}
-
-	if crl == nil{ return errors.New("couldn't fetch CRL using the provided URL and cache is empty")}
 
 	checkSignature, err := CheckCRLSignature(crl, caPath)
 	if !checkSignature {
-		return err
+		return isRevoked, nil
 	}
 
 	block, _ := pem.Decode(ek)
 	if block == nil {
-		return err
+		return isRevoked, err
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return err
+		return isRevoked, err
 	}
 
 	serialNumber := cert.SerialNumber
@@ -109,11 +138,11 @@ func CheckRevocationList(ek []byte, caPath string, vcekCRLUrl string, vlekCRLUrl
 		for i := len(revoked) - 1; i >= 0; i-- {
 			revockedSerialNumber := revoked[i].SerialNumber
 			if serialNumber.Cmp(revockedSerialNumber) == 0 {
-				err = errors.New("the certificate is revoked")
-				return err
+				isRevoked = true
+				return isRevoked, err
 			}
 		}
 	}
-	
-	return errFetchCRL
+
+	return isRevoked, err
 }

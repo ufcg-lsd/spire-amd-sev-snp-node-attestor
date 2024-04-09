@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -37,13 +38,11 @@ const (
 )
 
 type Config struct {
-	trustDomain      spiffeid.TrustDomain
-	VcekAMDCertChain string `hcl:"vcek_cert_chain"`
-	VlekAMDCertChain string `hcl:"vlek_cert_chain"`
-	VcekCRLUrl       string `hcl:"vcek_crl_url"`
-	VlekCRLUrl       string `hcl:"vlek_crl_url"`
-	InsecureCRL      bool   `hcl:"insecure_crl"`
-	MinFWVersion     string `hcl:"min_fw_version"`
+	trustDomain  spiffeid.TrustDomain
+	EKCertChains []string `hcl:"cert_chains"`
+	CRLURLs      []string `hcl:"crl_urls"`
+	InsecureCRL  bool     `hcl:"insecure_crl"`
+	MinFWVersion string   `hcl:"min_fw_version"`
 }
 
 type Plugin struct {
@@ -94,13 +93,12 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 		return status.Errorf(codes.Internal, "invalid report size: %v", err)
 	}
 
-	signingKey := snp.GetSigningKey(&reportBytes)
-	err = p.validadeEndorsmentKey(ek, signingKey, config)
+	err = p.validadeEndorsmentKey(ek, config)
 	if err != nil {
 		return err
 	}
 
-	err = p.crlVerification(ek, signingKey, config)
+	err = p.crlVerification(ek, config)
 	if err != nil {
 		return err
 	}
@@ -130,39 +128,35 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 	return err
 }
 
-func (p *Plugin) validadeEndorsmentKey(ek []byte, signingKey uint32, config *Config) error {
+func (p *Plugin) validadeEndorsmentKey(ek []byte, config *Config) error {
 	var valid = false
 	var err error
-	if signingKey == 0 {
-		valid, err = snp_util.ValidateEKCertChain(ek, config.VcekAMDCertChain)
-	} else {
-		valid, err = snp_util.ValidateEKCertChain(ek, config.VlekAMDCertChain)
-	}
-	if !valid {
-		return status.Errorf(codes.InvalidArgument, "unable to validate AMD EK with AMD cert chain: %v", err)
+
+	for _, certChainPath := range config.EKCertChains {
+		valid, err = snp_util.ValidateEKCertChain(ek, certChainPath)
+		if valid {
+			return nil
+		}
 	}
 
-	return err
+	return status.Errorf(codes.InvalidArgument, "unable to validate AMD EK with AMD cert chain: %v", err)
 }
 
-func (p *Plugin) crlVerification(ek []byte, signingKey uint32, config *Config) error {
+func (p *Plugin) crlVerification(ek []byte, config *Config) error {
 	var err error
-	var caPath string
-	if signingKey == 0 {
-		caPath = config.VcekAMDCertChain
-	} else {
-		caPath = config.VlekAMDCertChain
-	}
+	var isRevoked bool = false
 
 	if config.InsecureCRL {
 		p.logger.Warn("InsecureCRL enabled, skipping CRL verification")
 	} else {
-		err = snp_util.CheckRevocationList(ek, caPath, p.config.VcekCRLUrl, p.config.VlekCRLUrl, signingKey)
-		if err != nil {
-			if err.Error() == "warn using cache" {
-				p.logger.Warn("couldn't fetch CRL using the provided URL. Using cache")
-			} else {
-				return status.Errorf(codes.Aborted, "failed at CRL verification: %v", err)
+		for _, caPath := range config.EKCertChains {
+			for _, crlURL := range config.CRLURLs {
+				isRevoked, err = snp_util.IsCertRevoked(ek, caPath, crlURL)
+				if isRevoked {
+					return errors.New("the EK certificate is revoked")
+				} else if err != nil && err.Error() == "warn using cache" {
+					p.logger.Warn("couldn't fetch CRL using the provided URL. Using cache")
+				}
 			}
 		}
 	}
@@ -171,10 +165,6 @@ func (p *Plugin) crlVerification(ek []byte, signingKey uint32, config *Config) e
 }
 
 func AgentID(pluginName, trustDomain string, report snp.AttestationReportExpanded) string {
-	chipId := report.ChipId[:10]
-	measurement := report.Measurement[:10]
-	reportId := report.ReportId[:10]
-
 	u := url.URL{
 		Scheme: "spiffe",
 		Host:   trustDomain,
@@ -183,26 +173,15 @@ func AgentID(pluginName, trustDomain string, report snp.AttestationReportExpande
 			"agent",
 			pluginName,
 			"chip_id",
-			PrintByteArray(chipId[:]),
+			hex.EncodeToString(report.ChipId[:10]),
 			"measurement",
-			PrintByteArray(measurement[:]),
+			hex.EncodeToString(report.Measurement[:10]),
 			"report_id",
-			PrintByteArray(reportId[:]),
+			hex.EncodeToString(report.ReportId[:10]),
 		),
 	}
 
 	return u.String()
-}
-
-func PrintByteArray(array []byte) string {
-	str := ""
-
-	for i := 0; i < len(array); i++ {
-		value := array[i]
-		str += fmt.Sprintf("%02x", value)
-	}
-
-	return str
 }
 
 func buildSelectorValues(report snp.AttestationReportExpanded, signing_key []byte, config *Config) []string {
@@ -225,8 +204,8 @@ func buildSelectorValues(report snp.AttestationReportExpanded, signing_key []byt
 	selectorValues = append(selectorValues, "policy:migrate_ma:"+fmt.Sprintf("%t", report.Policy.MIGRATE_MA_ALLOWED))
 	selectorValues = append(selectorValues, "policy:debug:"+fmt.Sprintf("%t", report.Policy.DEBUG_ALLOWED))
 	selectorValues = append(selectorValues, "policy:single_socket:"+fmt.Sprintf("%t", report.Policy.SINGLE_SOCKET_ALLOWED))
-	selectorValues = append(selectorValues, "family_id:"+PrintByteArray(report.FamilyId[:]))
-	selectorValues = append(selectorValues, "image_id:"+PrintByteArray(report.ImageId[:]))
+	selectorValues = append(selectorValues, "family_id:"+hex.EncodeToString(report.FamilyId[:]))
+	selectorValues = append(selectorValues, "image_id:"+hex.EncodeToString(report.ImageId[:]))
 	selectorValues = append(selectorValues, "vmpl:"+fmt.Sprintf("%d", report.VMPL))
 	selectorValues = append(selectorValues, "signature_algo:"+fmt.Sprintf("%d", report.SignatureAlgo))
 	selectorValues = append(selectorValues, "current_tcb:boot_loader:"+fmt.Sprintf("%d", report.CurrentTCB.BootLoader))
@@ -241,16 +220,16 @@ func buildSelectorValues(report snp.AttestationReportExpanded, signing_key []byt
 	selectorValues = append(selectorValues, "signing_key:"+fmt.Sprintf("%d", report.Flags.SIGNING_KEY))
 	selectorValues = append(selectorValues, "mask_chip_key:"+fmt.Sprintf("%t", report.Flags.MASK_CHIP_KEY))
 	selectorValues = append(selectorValues, "author_key_en:"+fmt.Sprintf("%t", report.Flags.AUTHOR_KEY_EN))
-	selectorValues = append(selectorValues, "measurement:"+PrintByteArray(measurement[:]))
-	selectorValues = append(selectorValues, "host_data:"+PrintByteArray(report.HostData[:]))
-	selectorValues = append(selectorValues, "id_key_digest:"+PrintByteArray(report.IdKeyDigest[:]))
-	selectorValues = append(selectorValues, "author_key_digest:"+PrintByteArray(report.AuthorKeyDigest[:]))
-	selectorValues = append(selectorValues, "report_id_ma:"+PrintByteArray(report.ReportIdMA[:]))
+	selectorValues = append(selectorValues, "measurement:"+hex.EncodeToString(measurement[:]))
+	selectorValues = append(selectorValues, "host_data:"+hex.EncodeToString(report.HostData[:]))
+	selectorValues = append(selectorValues, "id_key_digest:"+hex.EncodeToString(report.IdKeyDigest[:]))
+	selectorValues = append(selectorValues, "author_key_digest:"+hex.EncodeToString(report.AuthorKeyDigest[:]))
+	selectorValues = append(selectorValues, "report_id_ma:"+hex.EncodeToString(report.ReportIdMA[:]))
 	selectorValues = append(selectorValues, "reported_tcb:boot_loader:"+fmt.Sprintf("%d", report.ReportedTCB.BootLoader))
 	selectorValues = append(selectorValues, "reported_tcb:tee:"+fmt.Sprintf("%d", report.ReportedTCB.TEE))
 	selectorValues = append(selectorValues, "reported_tcb:snp:"+fmt.Sprintf("%d", report.ReportedTCB.SNP))
 	selectorValues = append(selectorValues, "reported_tcb:microcode:"+fmt.Sprintf("%d", report.ReportedTCB.Microcode))
-	selectorValues = append(selectorValues, "chip_id:"+PrintByteArray(report.ChipId[:]))
+	selectorValues = append(selectorValues, "chip_id:"+hex.EncodeToString(report.ChipId[:]))
 	selectorValues = append(selectorValues, "committed_tcb:boot_loader:"+fmt.Sprintf("%d", report.CommitedTCB.BootLoader))
 	selectorValues = append(selectorValues, "committed_tcb:tee:"+fmt.Sprintf("%d", report.CommitedTCB.TEE))
 	selectorValues = append(selectorValues, "committed_tcb:snp:"+fmt.Sprintf("%d", report.CommitedTCB.SNP))
@@ -265,7 +244,7 @@ func buildSelectorValues(report snp.AttestationReportExpanded, signing_key []byt
 	selectorValues = append(selectorValues, "launch_tcb:tee:"+fmt.Sprintf("%d", report.LaunchTCB.TEE))
 	selectorValues = append(selectorValues, "launch_tcb:snp:"+fmt.Sprintf("%d", report.LaunchTCB.SNP))
 	selectorValues = append(selectorValues, "launch_tcb:microcode:"+fmt.Sprintf("%d", report.LaunchTCB.Microcode))
-	selectorValues = append(selectorValues, "signing_key_hash:"+PrintByteArray(sha512EK[:]))
+	selectorValues = append(selectorValues, "signing_key_hash:"+hex.EncodeToString(sha512EK[:]))
 
 	return selectorValues
 }
