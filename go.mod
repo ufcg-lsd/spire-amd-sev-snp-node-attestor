@@ -17,6 +17,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/google/go-tpm-tools v0.3.12 // indirect
 	github.com/google/logger v1.1.1 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/go-plugin v1.4.6 // indirect

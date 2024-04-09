@@ -8,7 +8,7 @@ import (
 const HandleEndorsement tpmutil.Handle = 0x81010001
 
 var (
-	AIKTemplate tpm2.Public = tpm2.Public{
+	AKTemplate tpm2.Public = tpm2.Public{
 		Type:    tpm2.AlgRSA,
 		NameAlg: tpm2.AlgSHA256,
 		Attributes: tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin |

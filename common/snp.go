@@ -160,7 +160,7 @@ type AttestationDataRequest struct {
 type AttestationRequestAzure struct {
 	Report      []byte
 	Cert        []byte
-	TPMCert     []byte
+	TPMAK     	[]byte
 	RuntimeData []byte
 }
 
@@ -168,7 +168,7 @@ type RegistrationRequestSVSM struct {
 	Report []byte
 	Cert   []byte
 	TPMEK  []byte
-	TPMAIK []byte
+	TPMAK  []byte
 }
 
 type AttestationRequestSVSM struct {

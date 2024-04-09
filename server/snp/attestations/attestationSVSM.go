@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 
 	snp "snp/common"
-	snp_util "snp/server/snp/snputil"
+	snputil "snp/server/snp/snputil"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpm2/credactivation"
@@ -40,35 +40,46 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_Attes
 		return nil, nil, status.Errorf(codes.Internal, "unable to unmarshal challenge response: %v", err)
 	}
 
-
 	DecEKPub, err := snp.DecodeEK(registration.TPMEK)
+
 	if err != nil {
 		return nil, nil, status.Errorf(codes.Internal, "Decode TPM EK failed: %v", err)
 	}
 
-	valid, err := snp_util.ValidateTPMEKFromReport(registration.Report, DecEKPub)
+	valid, err := snputil.ValidateTPMEKFromReport(registration.Report, DecEKPub)
 
 	if !valid {
 		return nil, nil, status.Errorf(codes.InvalidArgument, "unable to validate TPM EK hash from report: %v", err)
 	}
 
-	aikPub, err := tpm2.DecodePublic(registration.TPMAIK)
+	akPub, err := tpm2.DecodePublic(registration.TPMAK)
+
 	if err != nil {
-		return nil, nil, status.Errorf(codes.InvalidArgument, "unable to decode public blob of AIK: %v", err)
-	}
-	aikPubName, err := aikPub.Name()
-	if err != nil {
-		return nil, nil, status.Errorf(codes.InvalidArgument, "unable to get AIK pub name: %v", err)
+		return nil, nil, status.Errorf(codes.InvalidArgument, "unable to decode public blob of AK: %v", err)
 	}
 
-	if aikPubName.Digest == nil {
-		return nil, nil, status.Errorf(codes.InvalidArgument, "AIK digest is nil: %v", err)
+	akPubRSA, err := snp.ExtractRSAPublicKey(akPub)
+
+	if err != nil {
+		return nil, nil, status.Errorf(codes.InvalidArgument, "unable to extract RSA public key of AK: %v", err)
+	}
+
+	akPubPEM, err := snp.EncodePublicKeyToPEM(akPubRSA)
+
+	if err != nil {
+		return nil, nil, status.Errorf(codes.InvalidArgument, "unable to convert AK RSA public key to PEM : %v", err)
+	}
+
+	digest, err := snputil.GetAKDigest(akPub)
+
+	if err != nil {
+		return nil, nil, status.Errorf(codes.InvalidArgument, "unable to get AK digest: %v", err)
 	}
 
 	credential := make([]byte, 16)
 	rand.Read(credential)
 
-	credBlob, encryptedSecret, err := credactivation.Generate(aikPubName.Digest, DecEKPub, 16, credential)
+	credBlob, encryptedSecret, err := credactivation.Generate(digest, DecEKPub, 16, credential)
 	if err != nil {
 		return nil, nil, status.Errorf(codes.Internal, "makeCredential failed: %v", credBlob)
 	}
@@ -110,10 +121,9 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_Attes
 		return nil, nil, status.Errorf(codes.Internal, "secret received doesn't match with the credential sent")
 	}
 
-	aik, _ := snp.ExtractRSAPublicKey(aikPub)
-	encAIK := snp.EncodePublicKeyToPEM(aik)
+	
 
-	checkQuote, err := snp_util.ValidateQuote(encAIK, attestation.QuoteData.Quote, attestation.QuoteData.Sig, nonce)
+	checkQuote, err := snputil.ValidateQuote(akPubPEM, attestation.QuoteData.Quote, attestation.QuoteData.Sig, nonce)
 
 	if !checkQuote {
 		return nil, nil, status.Error(codes.InvalidArgument, "unable to check quote:")

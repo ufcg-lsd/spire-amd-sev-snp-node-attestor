@@ -47,6 +47,20 @@ func ValidateQuote(tpmPubPem []byte, quote []byte, sig *tpm2.Signature, nonce []
 	return true, nil
 }
 
+func GetAKDigest(akPub tpm2.Public) (*tpm2.HashValue, error) {
+
+	akPubName, err := akPub.Name()
+	if err != nil {
+		return &tpm2.HashValue{}, fmt.Errorf("unable to get AK pub name: %v", err)
+	}
+
+	if akPubName.Digest == nil {
+		return &tpm2.HashValue{}, fmt.Errorf("AK digest can not be nil: %v", err)
+	}
+
+	return akPubName.Digest, nil
+}
+
 func verifyNonce(nonce []byte, quoteNonce []byte) (bool, error) {
 	shaNonce := sha256.Sum256(nonce)
 
@@ -197,4 +211,3 @@ func getEKHashFromReport(initReport []byte) []byte {
 
 	return ekSHA512
 }
-

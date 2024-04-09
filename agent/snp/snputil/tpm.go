@@ -6,17 +6,17 @@ import (
 	"io"
 	snp "snp/common"
 
+	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
 
 const (
 	AzureSNPReportIndex         tpmutil.Handle = 0x01400001
-	TPMAkHandle                 tpmutil.Handle = 0x81000003
+	TPMAKHandle                 tpmutil.Handle = 0x81000003
 	TPMAuthHandle               tpmutil.Handle = 0x40000001
+	TPMEKHandle                 tpmutil.Handle = 0x81010001
 	SVSMOnPremiseSNPReportIndex tpmutil.Handle = 0x1C00002
-	tpmEKHandle                 tpmutil.Handle = 0x81010001
-	tpmAIKHandle                tpmutil.Handle = tpmutil.Handle(tpm2.TransientFirst + 0x1)
 	prefixZeros                 int16          = 32
 )
 
@@ -64,10 +64,10 @@ func GetRuntimeData(initReport []byte) ([]byte, error) {
 	return runtimeData, nil
 }
 
-func GetQuoteTPM(rwc io.ReadWriteCloser, nonce [32]byte, handle tpmutil.Handle) ([]byte, *tpm2.Signature, error) {
+func GetQuoteTPM(rwc io.ReadWriteCloser, nonce [32]byte) ([]byte, *tpm2.Signature, error) {
 	pcrSelection := tpm2.PCRSelection{Hash: tpm2.AlgSHA256, PCRs: []int{4, 7}}
 
-	quote, sig, err := tpm2.Quote(rwc, handle, "", "", nonce[:], pcrSelection, tpm2.AlgNull)
+	quote, sig, err := tpm2.Quote(rwc, TPMAKHandle, "", "", nonce[:], pcrSelection, tpm2.AlgNull)
 	if err != nil {
 		fmt.Printf("Error to create quote: %v\n", err)
 	}
@@ -75,24 +75,24 @@ func GetQuoteTPM(rwc io.ReadWriteCloser, nonce [32]byte, handle tpmutil.Handle) 
 	return quote, sig, err
 }
 
-func GetAK(rwc io.ReadWriteCloser, handle tpmutil.Handle) ([]byte, error) {
-	ak, _, _, err := tpm2.ReadPublic(rwc, handle)
+func GetAK(rwc io.ReadWriteCloser) ([]byte, error) {
+
+	ak, _, _, err := tpm2.ReadPublic(rwc, TPMAKHandle)
 	if err != nil {
-		return nil, err
+		return []byte{}, err
 	}
 
-	rsaPubKey, err := snp.ExtractRSAPublicKey(ak)
+	akBlob, err := ak.Encode()
+
 	if err != nil {
-		return nil, err
+		return []byte{}, err
 	}
 
-	pemBytes := snp.EncodePublicKeyToPEM(rsaPubKey)
-
-	return pemBytes, nil
+	return akBlob, nil
 }
 
 func GetTPMEK(rwc io.ReadWriteCloser) (tpm2.Public, error) {
-	ek, _, _, err := tpm2.ReadPublic(rwc, tpmEKHandle)
+	ek, _, _, err := tpm2.ReadPublic(rwc, TPMEKHandle)
 
 	if err != nil {
 		return tpm2.Public{}, fmt.Errorf("tpm2.ReadPublic failed: %w", err)
@@ -103,23 +103,8 @@ func GetTPMEK(rwc io.ReadWriteCloser) (tpm2.Public, error) {
 	return ek, err
 }
 
-func GetAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
+func CreateTPMAK(rwc io.ReadWriteCloser) ([]byte, error) {
 
-	aik, _, _, err := tpm2.ReadPublic(rwc, tpmAIKHandle)
-	if err != nil {
-		return 0, []byte{}, err
-	}
-
-	aikBlob, err := aik.Encode()
-
-	if err != nil {
-		return 0, []byte{}, err
-	}
-
-	return tpmAIKHandle, aikBlob, nil
-}
-
-func CreateTPMAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
 	sessCreateHandle, _, err := tpm2.StartAuthSession(
 		rwc,
 		tpm2.HandleNull,
@@ -133,7 +118,7 @@ func CreateTPMAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
 	defer tpm2.FlushContext(rwc, sessCreateHandle)
 
 	if err != nil {
-		return 0, nil, fmt.Errorf("tpm2.StartAuthSession failed: %v", err)
+		return nil, fmt.Errorf("tpm2.StartAuthSession failed: %v", err)
 	}
 
 	_, _, err = tpm2.PolicySecret(
@@ -146,7 +131,7 @@ func CreateTPMAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
 		sessCreateHandle, nil, nil, nil, 0)
 
 	if err != nil {
-		return 0, nil, fmt.Errorf("tpm2.PolicySecret failed: %v", err)
+		return nil, fmt.Errorf("tpm2.PolicySecret failed: %v", err)
 	}
 
 	authCommandCreateAuth := tpm2.AuthCommand{
@@ -156,14 +141,14 @@ func CreateTPMAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
 
 	privateBlob, publicBlob, _, _, _, err := tpm2.CreateKeyUsingAuth(
 		rwc,
-		tpmEKHandle,
+		TPMEKHandle,
 		snp.PcrSelectionAll,
 		authCommandCreateAuth,
 		"",
-		snp.AIKTemplate)
+		snp.AKTemplate)
 
 	if err != nil {
-		return 0, nil, fmt.Errorf("tpm2.CreateKeyUsingAuth failed: %v", err)
+		return nil, fmt.Errorf("tpm2.CreateKeyUsingAuth failed: %v", err)
 	}
 
 	loadCreateHandle, _, err := tpm2.StartAuthSession(
@@ -179,7 +164,7 @@ func CreateTPMAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
 	defer tpm2.FlushContext(rwc, loadCreateHandle)
 
 	if err != nil {
-		return 0, nil, fmt.Errorf("tpm2.StartAuthSession failed: %v", err)
+		return nil, fmt.Errorf("tpm2.StartAuthSession failed: %v", err)
 	}
 
 	_, _, err = tpm2.PolicySecret(
@@ -192,7 +177,7 @@ func CreateTPMAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
 		loadCreateHandle, nil, nil, nil, 0)
 
 	if err != nil {
-		return 0, nil, fmt.Errorf("tpm2.PolicySecret failed: %v", err)
+		return nil, fmt.Errorf("tpm2.PolicySecret failed: %v", err)
 	}
 
 	authCommandLoad := tpm2.AuthCommand{
@@ -200,13 +185,68 @@ func CreateTPMAIK(rwc io.ReadWriteCloser) (tpmutil.Handle, []byte, error) {
 		Attributes: tpm2.AttrContinueSession,
 	}
 
-	aikHandle, _, err := tpm2.LoadUsingAuth(rwc, tpmEKHandle, authCommandLoad, publicBlob, privateBlob)
+	akHandle, _, err := tpm2.LoadUsingAuth(rwc, TPMEKHandle, authCommandLoad, publicBlob, privateBlob)
 
 	if err != nil {
-		return 0, nil, fmt.Errorf("tpm2.LoadUsingAuth failed: %v", err)
+		return nil, fmt.Errorf("tpm2.LoadUsingAuth failed: %v", err)
 	}
 
-	return aikHandle, publicBlob, nil
+	err = tpm2.EvictControl(rwc, "", tpm2.HandleOwner, akHandle, TPMAKHandle)
+
+	if err != nil {
+		return nil, fmt.Errorf("tpm2.EvictControl failed: %v", err)
+	}
+
+	return publicBlob, nil
+}
+
+func GetChallengeSecret(rwc io.ReadWriteCloser, attestationRequest *snp.AttestationRequestSVSM) ([]byte, error) {
+
+	session, _, err := tpm2.StartAuthSession(rwc,
+		tpm2.HandleNull,
+		tpm2.HandleNull,
+		make([]byte, 16),
+		nil,
+		tpm2.SessionPolicy,
+		tpm2.AlgNull,
+		tpm2.AlgSHA256)
+
+	defer tpm2.FlushContext(rwc, session)
+
+	if err != nil {
+		return nil, fmt.Errorf("tpm2.StartAuthSession failed: %v", err)
+	}
+
+	auth := tpm2.AuthCommand{
+		Session:    tpm2.HandlePasswordSession,
+		Attributes: tpm2.AttrContinueSession,
+	}
+
+	if _, _, err := tpm2.PolicySecret(rwc, tpm2.HandleEndorsement, auth, session, nil, nil, nil, 0); err != nil {
+		return nil, fmt.Errorf("tpm2.PolicySecret failed: %v", err)
+	}
+
+	auths := []tpm2.AuthCommand{
+		auth,
+		{
+			Session:    session,
+			Attributes: tpm2.AttrContinueSession,
+		},
+	}
+
+	secret, err := tpm2.ActivateCredentialUsingAuth(
+		rwc,
+		auths,
+		TPMAKHandle,
+		snp.HandleEndorsement,
+		attestationRequest.Challenge.CredBlob,
+		attestationRequest.Challenge.Secret)
+
+	if err != nil {
+		return nil, fmt.Errorf("tpm2.ActivateCredentialUsingAuth failed: %v", err)
+	}
+
+	return secret, nil
 }
 
 func GetChallengeSecret(rwc io.ReadWriteCloser, attestationRequest *snp.AttestationRequestSVSM, aikHandle tpmutil.Handle) ([]byte, error) {
@@ -265,4 +305,19 @@ func VerifyAzure() bool {
 
 	_, err := tpm2.NVReadEx(rwc, AzureSNPReportIndex, TPMAuthHandle, "", 0)
 	return err == nil
+}
+
+func FlushContextAll(rwc io.ReadWriteCloser, handleType tpm2.HandleType) error {
+
+	handles, _ := client.Handles(rwc, handleType)
+
+	for _, handle := range handles {
+
+		err := tpm2.FlushContext(rwc, tpmutil.Handle(handle))
+
+		if err != nil {
+			return fmt.Errorf("tpm2.FlushContext failed: %v", err)
+		}
+	}
+	return nil
 }
