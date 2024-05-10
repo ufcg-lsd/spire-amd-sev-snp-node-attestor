@@ -10,6 +10,10 @@ Here, we want to present some problems you may face while running the plugin on 
 
 [3 - Why does the cert chain check fail against my VCEK/VLEK?](#3---why-the-cert-chain-check-fails-against-my-vcekvlek)
 
+[4 - How can I set the min_fw_version on server conf?](#4---how-can-i-set-the-min_fw_version-on-server-conf)
+
+[5 - How to pre-compute the launch measurement using the sev-snp-measure tool?](#5---how-to-pre-compute-the-launch-measurement-using-the-sev-snp-measure-tool)
+
 ## Questions:
 
 #### 1 - Issue in obtaining the SNP report?
@@ -37,3 +41,40 @@ To know which version to configure, you can go to [AMD's website](https://www.am
 After downloading it, you can extract the files and open the `<VERSION> Release Notes.txt` file. It will contain the release notes of the processor firmware. There you can see the versions and related security issues. To set the selector, you must use the `SPL` value of the firmware version.
 
 ![snp_fw_release_notes](./snp_fw_release_notes.png "snp_fw_release_notes")
+
+#### 5 - How to pre-compute the launch measurement using the *sev-snp-measure* tool?
+
+Using the [*sev-snp-measure*](https://github.com/virtee/sev-snp-measure.git), you can pre-calculate the launch measurement using the parameters like the *kernel, initrd, OVMF_CODE*, and information about the SEV-SNP virtual machine.
+
+It is a Python tool that can be obtained as follows:
+```bash
+git clone https://github.com/virtee/sev-snp-measure.git
+
+cd sev-snp-measure
+
+python ./sev-snp-measure.py #args
+```
+
+There are some details when computing the launch measurement for CVMs in different environments.
+
+For instance, for on-premise non-SVSM CVMs, you should execute the sev snp measure tool as follows:
+```bash
+python ./sev-snp-measure.py --mode snp --vcpus=<NUMBER_OF_CPUS> --vcpu-type=EPYC-v4 --ovmf=<OVMF_CODE_PATH> --kernel=<KERNEL_PATH> --initrd=<INITRD_PATH> --append=<KERNEL_CMD_LINE> --guest-features=0x1
+```
+
+Notice that if you are using an SNP Kernel older than 6.6 you need to keep using the flag --guest-feature=0x1, else you need to change the value to --guest-feature=0x21.
+
+For on-premise SVSM CVMs, you should execute the sev snp measure tool as follows:
+
+```bash
+#TODO
+```
+
+For AWS CVMs, you should first download the latest ovmf_img.fd from its [repo release notes](https://github.com/aws/uefi/releases).
+Then, execute the sev snp measure tool as follows:
+
+```bash
+python ./sev-snp-measure.py --mode snp --vcpus=<NUMBER_OF_CPUS> --vcpu-type=EPYC-v4 --vmm-type=ec2 --ovmf=<OVMF_CODE_PATH> --guest-features=0x1
+```
+
+Notice that only the firmware impacts the launch measurement of AWS SNP CVMs. Kernel and initrd have no impact on such a value.
