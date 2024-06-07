@@ -5,6 +5,7 @@ import (
 
 	snp "snp/common"
 	snp_util "snp/server/snp/snputil"
+
 	"github.com/google/go-tpm/tpm2"
 
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
@@ -41,7 +42,7 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_Atte
 		return nil, nil, status.Errorf(codes.Internal, "unable to unmarshal challenge response: %v", err)
 	}
 
-	str := []byte("")
+	str := []byte("SIGNAL")
 	err = stream.Send(&nodeattestorv1.AttestResponse{
 		Response: &nodeattestorv1.AttestResponse_Challenge{
 			Challenge: str,
