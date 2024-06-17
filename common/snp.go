@@ -160,7 +160,7 @@ type AttestationDataRequest struct {
 type AttestationRequestAzure struct {
 	Report      []byte
 	Cert        []byte
-	TPMAK     	[]byte
+	TPMAK       []byte
 	RuntimeData []byte
 }
 
@@ -179,14 +179,6 @@ type AttestationRequestSVSM struct {
 type AttestationResponseSVSM struct {
 	QuoteData QuoteData
 	Secret    []byte
-}
-
-func BuildAttestationReport(reportBin []byte) AttestationReport {
-	report := AttestationReport{}
-
-	binary.Read(bytes.NewBuffer(reportBin), binary.LittleEndian, &report)
-
-	return report
 }
 
 func BuildExpandedAttestationReport(reportBin []byte) AttestationReportExpanded {

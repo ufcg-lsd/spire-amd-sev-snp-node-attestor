@@ -35,6 +35,11 @@ func (crlCache *CRLCache) GetEntry(url string) *CRLCacheEntry {
 	return crlCached
 }
 
+/*
+Using GetCRLByURL as an var to override it on tests
+*/
+var GetCRLByURL = getCRLByURL
+
 func (crlCache *CRLCache) AddEntry(url string, crl *x509.RevocationList) {
 	crlCache.mutex.Lock()
 	crlCache.entries[url] = &CRLCacheEntry{
@@ -75,7 +80,7 @@ func CheckCRLSignature(crl *x509.RevocationList, caPath string) (bool, error) {
 	return true, err
 }
 
-func GetCRLByURL(crlUrl string) (*x509.RevocationList, error) {
+func getCRLByURL(crlUrl string) (*x509.RevocationList, error) {
 	resp, err := http.Get(crlUrl)
 	if err != nil {
 		return nil, err

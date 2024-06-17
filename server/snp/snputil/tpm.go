@@ -16,7 +16,7 @@ import (
 	"math/big"
 	snp "snp/common"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 )
 
 type QuoteInfo struct {
@@ -67,7 +67,7 @@ func verifyNonce(nonce []byte, quoteNonce []byte) (bool, error) {
 	return bytes.Equal(shaNonce[:], quoteNonce), nil
 }
 
-func getAKFromRuntimeData(runtimeData []byte) string {
+func GetAKFromRuntimeData(runtimeData []byte) string {
 	jsonData := string(runtimeData)
 
 	var keysData struct {
@@ -154,7 +154,6 @@ func getPublicKey(akPubPem []byte) (*rsa.PublicKey, error) {
 }
 
 func ValidateTPMEKFromReport(report []byte, ek crypto.PublicKey) (bool, error) {
-
 	hash := getEKHashFromReport(report)
 
 	rsaEKPublicKey, ok := ek.(*rsa.PublicKey)
@@ -198,8 +197,7 @@ func ValidateTPMEKFromReport(report []byte, ek crypto.PublicKey) (bool, error) {
 
 func ValidateAKGuestReport(runtimeData *[]byte, ak *[]byte) bool {
 	akString := string(*ak)
-	runtimeAKString := getAKFromRuntimeData(*runtimeData)
-
+	runtimeAKString := GetAKFromRuntimeData(*runtimeData)
 	return akString == runtimeAKString
 }
 

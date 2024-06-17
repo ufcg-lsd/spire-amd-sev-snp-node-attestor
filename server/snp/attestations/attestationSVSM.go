@@ -8,8 +8,8 @@ import (
 	snp "snp/common"
 	snputil "snp/server/snp/snputil"
 
-	"github.com/google/go-tpm/tpm2"
-	"github.com/google/go-tpm/tpm2/credactivation"
+	"github.com/google/go-tpm/legacy/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2/credactivation"
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -120,8 +120,6 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_Attes
 	if !bytes.Equal(attestation.Secret, credential) {
 		return nil, nil, status.Errorf(codes.Internal, "secret received doesn't match with the credential sent")
 	}
-
-	
 
 	checkQuote, err := snputil.ValidateQuote(akPubPEM, attestation.QuoteData.Quote, attestation.QuoteData.Sig, nonce)
 

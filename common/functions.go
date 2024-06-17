@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 )
 
 func GenerateNonce(length uint8) []byte {
@@ -32,7 +32,7 @@ func ExtractRSAPublicKey(tpmPub tpm2.Public) (*rsa.PublicKey, error) {
 	}
 	rsaPublicKey, ok := rsaPubKey.(*rsa.PublicKey)
 	if !ok {
-		return nil, fmt.Errorf("The public key is not an RSA public key")
+		return nil, fmt.Errorf("the public key is not an RSA public key")
 	}
 	return rsaPublicKey, nil
 }
@@ -81,7 +81,6 @@ func DecodeEK(pemBytes []byte) (crypto.PublicKey, error) {
 }
 
 func ParseMagicNumber(public tpm2.Public) []byte {
-
 	ek_pub, _ := public.Encode()
 
 	newArray := make([]byte, len(ek_pub)+2)

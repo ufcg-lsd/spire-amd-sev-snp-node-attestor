@@ -7,7 +7,7 @@ import (
 	snputil "snp/agent/snp/snputil"
 	snp "snp/common"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/nodeattestor/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,7 +16,6 @@ import (
 type AttestSVSM struct{}
 
 func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAttestationServer, ekPath string) error {
-
 	rwc, err := snputil.GetTPM()
 	if err != nil {
 		return status.Errorf(codes.Internal, "can't open TPM at /dev/tpm0: %v", err)
@@ -154,9 +153,8 @@ func (a *AttestSVSM) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidAt
 	})
 
 	if err != nil {
-		return status.Errorf(codes.Internal, "unable to send recoveredCredential data: %v", err)
+		err = status.Errorf(codes.Internal, "unable to send recoveredCredential data: %v", err)
 	}
 
-	return nil
-
+	return err
 }

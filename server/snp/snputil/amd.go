@@ -23,7 +23,7 @@ type ecdsaSignature struct {
 func ValidateGuestReportAgainstEK(report *[]byte, vcek *[]byte) bool {
 	pubKey := getECDSAPubKeyFromByteArray(vcek)
 
-	reportSplitted, signature := splitReportFromSignature(report)
+	reportSplitted, signature := SplitReportFromSignature(report)
 
 	parsedSignature := parseECDSASignature(signature)
 
@@ -52,7 +52,7 @@ func getECDSAPubKeyFromByteArray(byteArray *[]byte) *ecdsa.PublicKey {
 	return pub
 }
 
-func splitReportFromSignature(report *[]byte) ([]byte, []byte) {
+func SplitReportFromSignature(report *[]byte) ([]byte, []byte) {
 	reportWithoutSig := (*report)[:SIGNATURE_OFFSET]
 	sig := (*report)[SIGNATURE_OFFSET : REPORT_LENGTH-(SIGNATURE_LENGTH-144)]
 

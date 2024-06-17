@@ -6,7 +6,7 @@ import (
 	snp "snp/common"
 	snp_util "snp/server/snp/snputil"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 
 	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
 	"google.golang.org/grpc/codes"

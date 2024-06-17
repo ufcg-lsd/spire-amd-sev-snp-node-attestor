@@ -28,7 +28,7 @@ To enable third parties to have confidence in the VM's state, the SEV-SNP provid
 
 ### Chain of Trust
 
-To build a chain of trust between the AMD-SP and the guest VM that remote parties can validate, the AMD-SP provides a protected path through which the guest VM can request Attestation Reports on their behalf at any time. When the guest asks for a report, it supplies 512 bits of arbitrary data to be included in the report. The resulting report will contain this data alongside identity information about the guest and the host where it is running. The report can be signed by a Versioned Chip Endorsement Key (VCEK), an attestation signing key derived from chip-unique secrets, and a TCB (Trusted Computing Base) version, signed by the AMD Root Keys and kept inside the AMD-SP with no access by users. The report may also be signed by a Versioned Loaded Endorsement Key (VLEK), derived from a seed maintained by the AMD Key Derivation Service (KSD) [[5](https://www.amd.com/system/files/TechDocs/56860.pdf)]. The third-party should verify the authenticity of the report based on its signature. A successful signature verification proves that the 512 bits of guest data supplied in the report came from the guest whose identity is described.
+To build a chain of trust between the AMD-SP and the guest VM that remote parties can validate, the AMD-SP provides a protected path through which the guest VM can request Attestation Reports on their behalf at any time. When the guest asks for a report, it supplies 512 bits of arbitrary data to be included in the report. The resulting report will contain this data alongside identity information about the guest and the host where it is running. The report can be signed by a Versioned Chip Endorsement Key (VCEK), an attestation signing key derived from chip-unique secrets, and a TCB (Trusted Computing Base) version, signed by the AMD Root Keys and kept inside the AMD-SP with no access by users. The report may also be signed by a Versioned Loaded Endorsement Key (VLEK), derived from a seed maintained by the AMD Key Derivation Service (KSD) [[5](https://www.amd.com/system/files/TechDocs/56860.pdf)]. The third-party should verify the authenticity of the report based on its signature. A successfull signature verification proves that the 512 bits of guest data supplied in the report came from the guest whose identity is described.
 
 ### Attestation Report
 
@@ -244,7 +244,7 @@ sequenceDiagram
 5. The Agent sends the Attestation Report and the VCEK public certificate to the Server.
 6. The Server then verifies if the VCEK is valid by checking it against the AMD certificate chain.
 7. The Server verifies if the nonce included in the Attestation Report is correct and checks if the private part of the VCEK signed the Report.
-8. If the validations in step 7 were successful, the SVID is provided to the Agent.
+8. If the validations in step 7 were successfull, the SVID is provided to the Agent.
 
 ### Configuration
 

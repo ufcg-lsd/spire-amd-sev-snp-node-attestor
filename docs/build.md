@@ -19,6 +19,8 @@ make build-server BUILD_PATH=<PATH_TO_BUILD
 
 In the `amd-sev-snp` directory run this command.
 
+**Obs.: You must run it as sudo.**
+
 ```
-make test
+make test-coverage
 ```
