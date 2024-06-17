@@ -2,6 +2,7 @@ package snp
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	snp_attestation "snp/agent/snp/attestations"
@@ -42,17 +43,36 @@ func (p *Plugin) BrokerHostServices(broker pluginsdk.ServiceBroker) error {
 	return nil
 }
 
-func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestationServer) error {
+var CheckEnv = checkEnv
 
-	var attestAgent snp_attestation.AttestationAgent
+func checkEnv() string {
 	_, err := os.Stat("/dev/sev-guest")
 
+	var env string
+
 	if err == nil {
-		attestAgent = &snp_attestation.AttestSNP{}
+		env = "SNP"
 	} else if snputil.VerifyAzure() {
-		attestAgent = &snp_attestation.AttestAzure{}
+		env = "AZURE"
 	} else {
+		env = "SVSM"
+	}
+
+	return env
+}
+
+func (p *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestationServer) error {
+	var attestAgent snp_attestation.AttestationAgent
+	env := CheckEnv()
+
+	if env == "SNP" {
+		attestAgent = &snp_attestation.AttestSNP{}
+	} else if env == "AZURE" {
+		attestAgent = &snp_attestation.AttestAzure{}
+	} else if env == "SVSM" {
 		attestAgent = &snp_attestation.AttestSVSM{}
+	} else {
+		return errors.New("not a known SEV-SNP environment")
 	}
 
 	return attestAgent.GetAttestationData(stream, p.config.Ek)
@@ -73,4 +93,3 @@ func (p *Plugin) setConfig(config *Config) {
 	p.config = config
 	p.configMtx.Unlock()
 }
-

@@ -62,7 +62,6 @@ func (p *Plugin) BrokerHostServices(broker pluginsdk.ServiceBroker) error {
 }
 
 func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
-
 	config, err := p.getConfig()
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, "not configured: %v", err)
@@ -75,7 +74,7 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 	attestationType := req.GetPayload()
 
 	var attestServer snp_attestation.AttestationServer
-	if bytes.Equal(attestationType, []byte("Azure")) {
+	if bytes.Equal(attestationType, []byte("AZURE")) {
 		attestServer = &snp_attestation.AttestAzure{}
 	} else if bytes.Equal(attestationType, []byte("SVSM")) {
 		attestServer = &snp_attestation.AttestSVSM{}

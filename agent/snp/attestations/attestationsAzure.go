@@ -23,7 +23,7 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidA
 
 	err = stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
 		Data: &nodeattestorv1.PayloadOrChallengeResponse_Payload{
-			Payload: []byte("Azure"),
+			Payload: []byte("AZURE"),
 		},
 	})
 	if err != nil {

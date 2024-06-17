@@ -21,3 +21,7 @@ build:
 
 test:
 	go test ./tests
+
+test-coverage:
+	go test ./tests -v -cover -coverpkg=./... -coverprofile testing_profile
+	go tool cover -func=./testing_profile

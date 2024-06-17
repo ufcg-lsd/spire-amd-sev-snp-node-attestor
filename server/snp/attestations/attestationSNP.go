@@ -14,7 +14,6 @@ import (
 type AttestSNP struct{}
 
 func (a *AttestSNP) GetAttestationData(stream nodeattestorv1.NodeAttestor_AttestServer) ([]byte, []byte, error) {
-
 	nonce := snp.GenerateNonce(uint8(16))
 
 	err := stream.Send(&nodeattestorv1.AttestResponse{

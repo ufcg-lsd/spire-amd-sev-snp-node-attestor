@@ -4,3 +4,7 @@ snp-agent-plugin
 snp-server-plugin
 
 .vscode
+
+tests/keys/*
+!tests/keys/.gitkeep
+testing_profile

@@ -7,7 +7,7 @@ import (
 	snp "snp/common"
 
 	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
 
@@ -16,11 +16,13 @@ const (
 	TPMAKHandle                 tpmutil.Handle = 0x81000003
 	TPMAuthHandle               tpmutil.Handle = 0x40000001
 	TPMEKHandle                 tpmutil.Handle = 0x81010001
-	SVSMOnPremiseSNPReportIndex tpmutil.Handle = 0x1C00002
-	prefixZeros                 int16          = 32
+	SVSMOnPremiseSNPReportIndex tpmutil.Handle = 0x01C00002
+	AzureReportPrefixZeros      int16          = 32
 )
 
-func GetTPM() (io.ReadWriteCloser, error) {
+var GetTPM = getTPM
+
+func getTPM() (io.ReadWriteCloser, error) {
 	rwc, err := tpm2.OpenTPM("/dev/tpm0")
 	if err != nil {
 		return nil, err
@@ -36,7 +38,7 @@ func GetReportFromTPM(rwc io.ReadWriteCloser, reportIndex tpmutil.Handle) ([]byt
 
 	if reportIndex == AzureSNPReportIndex {
 		tpmReport, err = tpm2.NVReadEx(rwc, reportIndex, TPMAuthHandle, "", 0)
-		snpReport = tpmReport[prefixZeros : prefixZeros+1184]
+		snpReport = tpmReport[AzureReportPrefixZeros : AzureReportPrefixZeros+1184]
 	} else {
 		snpReport, err = tpm2.NVReadEx(rwc, reportIndex, TPMAuthHandle, "", 0)
 	}
@@ -76,7 +78,6 @@ func GetQuoteTPM(rwc io.ReadWriteCloser, nonce [32]byte) ([]byte, *tpm2.Signatur
 }
 
 func GetAK(rwc io.ReadWriteCloser) ([]byte, error) {
-
 	ak, _, _, err := tpm2.ReadPublic(rwc, TPMAKHandle)
 	if err != nil {
 		return []byte{}, err
@@ -104,7 +105,6 @@ func GetTPMEK(rwc io.ReadWriteCloser) (tpm2.Public, error) {
 }
 
 func CreateTPMAK(rwc io.ReadWriteCloser) ([]byte, error) {
-
 	sessCreateHandle, _, err := tpm2.StartAuthSession(
 		rwc,
 		tpm2.HandleNull,
@@ -201,7 +201,6 @@ func CreateTPMAK(rwc io.ReadWriteCloser) ([]byte, error) {
 }
 
 func GetChallengeSecret(rwc io.ReadWriteCloser, attestationRequest *snp.AttestationRequestSVSM) ([]byte, error) {
-
 	session, _, err := tpm2.StartAuthSession(rwc,
 		tpm2.HandleNull,
 		tpm2.HandleNull,
@@ -250,7 +249,6 @@ func GetChallengeSecret(rwc io.ReadWriteCloser, attestationRequest *snp.Attestat
 }
 
 func VerifyAzure() bool {
-
 	rwc, _ := GetTPM()
 	defer rwc.Close()
 
@@ -259,11 +257,9 @@ func VerifyAzure() bool {
 }
 
 func FlushContextAll(rwc io.ReadWriteCloser, handleType tpm2.HandleType) error {
-
 	handles, _ := client.Handles(rwc, handleType)
 
 	for _, handle := range handles {
-
 		err := tpm2.FlushContext(rwc, tpmutil.Handle(handle))
 
 		if err != nil {
