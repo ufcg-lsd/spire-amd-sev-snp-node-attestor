@@ -64,12 +64,6 @@ python ./sev-snp-measure.py --mode snp --vcpus=<NUMBER_OF_CPUS> --vcpu-type=EPYC
 
 Notice that if you are using an SNP Kernel older than 6.6 you need to keep using the flag --guest-feature=0x1, else you need to change the value to --guest-feature=0x21.
 
-For on-premise SVSM CVMs, you should execute the sev snp measure tool as follows:
-
-```bash
-#TODO
-```
-
 For AWS CVMs, you should first download the latest ovmf_img.fd from its [repo release notes](https://github.com/aws/uefi/releases).
 Then, execute the sev snp measure tool as follows:
 
