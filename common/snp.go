@@ -162,6 +162,7 @@ type AttestationRequestAzure struct {
 	Cert        []byte
 	TPMAK       []byte
 	RuntimeData []byte
+	QuoteData   QuoteData
 }
 
 type RegistrationRequestSVSM struct {

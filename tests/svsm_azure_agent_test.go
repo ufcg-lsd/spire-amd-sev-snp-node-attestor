@@ -163,29 +163,5 @@ func doAzureAttestationFlow(t *testing.T, agentPlugin agentnodeattestorv1.NodeAt
 		}); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to send challenge reponse to server plugin: %v", err)
 		}
-
-		serverResponse, err = serverStream.Recv()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to receive response from server plugin: %v", err)
-		}
-
-		if err := agentStream.Send(&agentnodeattestorv1.Challenge{
-			Challenge: serverResponse.GetChallenge(),
-		}); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to send challenge to agent plugin: %v", err)
-		}
-
-		agentResponse, err = agentStream.Recv()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to receive response from agent plugin: %v", err)
-		}
-
-		if err := serverStream.Send(&servernodeattestorv1.AttestRequest{
-			Request: &servernodeattestorv1.AttestRequest_ChallengeResponse{
-				ChallengeResponse: agentResponse.GetChallengeResponse(),
-			},
-		}); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to send challenge response to server plugin: %v", err)
-		}
 	}
 }

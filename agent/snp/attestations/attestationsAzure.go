@@ -66,11 +66,23 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidA
 		return status.Errorf(codes.Internal, "error fetching runtime data: %v", err)
 	}
 
+	quote, sig, err := snputil.GetQuoteTPM(rwc, nonce)
+
+	if err != nil {
+		return status.Errorf(codes.Internal, "error fetching tpm quote: %v", err)
+	}
+
+	quoteData := snp.QuoteData{
+		Quote: quote,
+		Sig:   sig,
+	}
+
 	attestationData, err := json.Marshal(snp.AttestationRequestAzure{
 		Report:      snpReport,
 		Cert:        snpEK,
 		TPMAK:       akPublicBlob,
 		RuntimeData: runtimeData,
+		QuoteData:   quoteData,
 	})
 
 	if err != nil {
@@ -87,31 +99,5 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_AidA
 		return status.Errorf(codes.Internal, "unable to send challenge response: %s", err)
 	}
 
-	quote, sig, err := snputil.GetQuoteTPM(rwc, nonce)
-
-	if err != nil {
-		return status.Errorf(codes.Internal, "error fetching tpm quote: %v", err)
-	}
-
-	quoteData, err := json.Marshal(snp.QuoteData{
-		Quote: quote,
-		Sig:   sig,
-	})
-
-	if err != nil {
-		return status.Errorf(codes.Internal, "unable to marshal quote data: %v", err)
-	}
-	_, err = stream.Recv()
-
-	if err != nil {
-		return status.Errorf(codes.Internal, "error receiving message: %v", err)
-	}
-
-	err = stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
-		Data: &nodeattestorv1.PayloadOrChallengeResponse_ChallengeResponse{
-			ChallengeResponse: quoteData,
-		},
-	})
-
-	return err
+	return nil
 }

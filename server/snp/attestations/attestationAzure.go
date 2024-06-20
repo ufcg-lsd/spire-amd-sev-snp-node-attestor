@@ -42,29 +42,7 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_Atte
 		return nil, nil, status.Errorf(codes.Internal, "unable to unmarshal challenge response: %v", err)
 	}
 
-	str := []byte("SIGNAL")
-	err = stream.Send(&nodeattestorv1.AttestResponse{
-		Response: &nodeattestorv1.AttestResponse_Challenge{
-			Challenge: str,
-		},
-	})
-	if err != nil {
-		return nil, nil, status.Errorf(status.Code(err), "unable to receive quote: %v", err)
-	}
-
-	quote, err := stream.Recv()
-
-	if err != nil {
-		return nil, nil, status.Errorf(status.Code(err), "unable to receive quote: %v", err)
-	}
-
-	quotePayload := quote.GetChallengeResponse()
-
-	quoteData := &snp.QuoteData{}
-
-	if err = json.Unmarshal(quotePayload, quoteData); err != nil {
-		return nil, nil, status.Errorf(codes.Internal, "unable to unmarshal quote response: %v", err)
-	}
+	quoteData := attestation.QuoteData
 
 	akPub, err := tpm2.DecodePublic(attestation.TPMAK)
 
