@@ -1,8 +1,8 @@
 # FAQ
 
-Here, we want to present some problems you may face while running the plugin on differents environments.
+Here, we want to present some problems you may face while running the plugin in different environments.
 
-## Sumary:
+## Summary:
 
 [1 - Issue in obtaining the SNP report?](#1---issue-in-obtaining-the-snp-report)
 
@@ -20,7 +20,7 @@ Here, we want to present some problems you may face while running the plugin on 
 
 Our plugin needs to have access to the device to be able to attest the node. If you are using the SVSM approach, you need to be sure that the Agent has access to the `/dev/tpm0` device. Otherwise, when running in a non-SVSM CVM, i.e., in CVMs with access to the `/dev/sev-guest` device, be sure the Agent has access to the sev-guest device. If you run a K8S cluster over CVMs, notice that these hints are implemented by exposing the device (TPM or SNP) to the pod.
 
-The error will appear as "panic: runtime error", and may be rose from the ```snputil.GetReportTPM()``` ou ```client.GetRawExtendedReport(device, nonce)``` functions.
+The error will appear as "panic: runtime error", and may arise from the ```snputil.GetReportTPM()``` or ```client.GetRawExtendedReport(device, nonce)``` functions.
 
 #### 2 - Why can't the plugin fetch the EK on some public clouds?
     
@@ -34,7 +34,7 @@ You need to be sure that your machine has a VCEK or VLEK. It is possible to get 
 
 The `min_fw_version` config on the server side defines which firmware version your server will consider updated. For instance, if you set it to `0x14`, every agent running on a node with firmware version greater than or equal to `0x14` will receive the selector `amd_sev_snp:fw_version:updated`. Otherwise, it will not receive any value.
 
-To know which version to configure, you can go to [AMD's website](https://www.amd.com/pt/developer/sev.html), search for `Links & Downloads` section, and download the `SEV Firmware` correspondent to your EPYC processor (Milan | Rome | Genoa | Naples).
+To know which version to configure, you can go to [AMD's website](https://www.amd.com/pt/developer/sev.html), search for the `Links & Downloads` section, and download the `SEV Firmware` correspondent to your EPYC processor (Milan | Rome | Genoa | Naples).
 
 ![amd_website_fw_downloads](./amd_website_fw_downloads.png "amd_website_fw_downloads")
 
