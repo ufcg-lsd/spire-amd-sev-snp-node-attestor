@@ -54,8 +54,10 @@ func checkEnv() string {
 		env = "SNP"
 	} else if snputil.VerifyAzure() {
 		env = "AZURE"
-	} else {
+	} else if snputil.VerifySVSM() {
 		env = "SVSM"
+	} else {
+		env = "NON-SNP"
 	}
 
 	return env
