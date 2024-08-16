@@ -256,6 +256,14 @@ func VerifyAzure() bool {
 	return err == nil
 }
 
+func VerifySVSM() bool {
+	rwc, _ := GetTPM()
+	defer rwc.Close()
+
+	_, err := tpm2.NVReadEx(rwc, SVSMOnPremiseSNPReportIndex, TPMAuthHandle, "", 0)
+	return err == nil
+}
+
 func FlushContextAll(rwc io.ReadWriteCloser, handleType tpm2.HandleType) error {
 	handles, _ := client.Handles(rwc, handleType)
 

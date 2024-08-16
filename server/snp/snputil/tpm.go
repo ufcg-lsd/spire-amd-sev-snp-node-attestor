@@ -195,10 +195,19 @@ func ValidateTPMEKFromReport(report []byte, ek crypto.PublicKey) (bool, error) {
 	return true, nil
 }
 
-func ValidateAKGuestReport(runtimeData *[]byte, ak *[]byte) bool {
+func ValidateAKGuestReport(runtimeData *[]byte, ak *[]byte, report *[]byte) bool {
 	akString := string(*ak)
 	runtimeAKString := GetAKFromRuntimeData(*runtimeData)
-	return akString == runtimeAKString
+
+	if akString != runtimeAKString {
+		return false
+	}
+
+	reportData := getReportDataFromReport(*report)
+
+	runtimeHash := sha256.Sum256(*runtimeData)
+
+	return runtimeHash == [32]byte(reportData)
 }
 
 func getEKHashFromReport(initReport []byte) []byte {
@@ -208,4 +217,11 @@ func getEKHashFromReport(initReport []byte) []byte {
 	ekSHA512 := initReport[skipBytes:144]
 
 	return ekSHA512
+}
+
+func getReportDataFromReport(initReport []byte) []byte {
+	start := 80
+	end := 80 + 64
+
+	return initReport[start:end]
 }

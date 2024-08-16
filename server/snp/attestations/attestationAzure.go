@@ -68,7 +68,7 @@ func (a *AttestAzure) GetAttestationData(stream nodeattestorv1.NodeAttestor_Atte
 		return nil, nil, status.Error(codes.InvalidArgument, "unable to check quote:")
 	}
 
-	valid := snp_util.ValidateAKGuestReport(&attestation.RuntimeData, &akPubPEM)
+	valid := snp_util.ValidateAKGuestReport(&attestation.RuntimeData, &akPubPEM, &attestation.Report)
 	if !valid {
 		return nil, nil, status.Errorf(codes.Internal, "unable to validate guest report against ak: %v", err)
 	}

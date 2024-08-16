@@ -3,6 +3,7 @@ package snp_test
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
 	"encoding/base64"
@@ -223,6 +224,9 @@ func (sim *TPMSimulator) saveSVSMAzureReport(handle tpmutil.Handle) error {
 	runtimeData, _ = json.Marshal(runtimeDataStruct)
 	copy(svsmAzureReport[1236:], runtimeData)
 
+	runtimeHash := sha256.Sum256(runtimeData)
+	copy(svsmOnPremiseReport[80:144], runtimeHash[:])
+
 	reportWithoutSig, _ := snputil.SplitReportFromSignature(&svsmOnPremiseReport)
 	r, s, err := signMessage(dir+"/keys/private/vcek/key.pem", reportWithoutSig)
 	if err != nil {
@@ -231,8 +235,8 @@ func (sim *TPMSimulator) saveSVSMAzureReport(handle tpmutil.Handle) error {
 
 	copy(svsmOnPremiseReport[snputil.SIGNATURE_OFFSET:snputil.SIGNATURE_OFFSET+72], r[:])
 	copy(svsmOnPremiseReport[snputil.SIGNATURE_OFFSET+72:snputil.SIGNATURE_OFFSET+144], s[:])
-	copy(svsmAzureReport[agentsnputil.AzureReportPrefixZeros:agentsnputil.AzureReportPrefixZeros+1184], svsmOnPremiseReport)
 
+	copy(svsmAzureReport[agentsnputil.AzureReportPrefixZeros:agentsnputil.AzureReportPrefixZeros+1184], svsmOnPremiseReport)
 	err = tpm2.NVDefineSpace(sim,
 		tpm2.HandlePlatform,
 		handle,
