@@ -1,0 +1,23 @@
+# when configuring a ci, use a shell executor.
+# this is necessary because the mock, fundamental to tests, needs to access some kernel modules.
+stages:
+  - test
+
+test-ci:
+  stage: test
+  script:
+    #installing mock prequequisites
+    - apt update
+    - apt install -y build-essential libfuse-dev libssl-dev pkg-config uuid-dev wget git openssh-client kmod
+    #installing golang
+    - wget https://go.dev/dl/go1.23.1.linux-amd64.tar.gz
+    - rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.1.linux-amd64.tar.gz
+    - export PATH=$PATH:/usr/local/go/bin
+    - go version
+    #configuring cuse 
+    - modprobe cuse
+    #running tests
+    - rm -rf .tests/keys/private
+    - rm -rf .tests/keys/public
+    - go test ./tests
+
