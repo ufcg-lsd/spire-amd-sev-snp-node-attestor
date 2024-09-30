@@ -308,12 +308,15 @@ func clean(t *testing.T) {
 }
 
 func setupCerts(t *testing.T) {
-	require.NoError(t, os.Mkdir(dir+"/keys/public", 0777))
-	require.NoError(t, os.Mkdir(dir+"/keys/public/vcek", 0777))
-	require.NoError(t, os.Mkdir(dir+"/keys/public/vlek", 0777))
-	require.NoError(t, os.Mkdir(dir+"/keys/private", 0777))
-	require.NoError(t, os.Mkdir(dir+"/keys/private/vcek", 0777))
-	require.NoError(t, os.Mkdir(dir+"/keys/private/vlek", 0777))
+	os.Mkdir("/etc/sev-guest", 0777)
+	os.Mkdir("/etc/sev-guest/vcek", 0777)
+	os.Mkdir("/etc/sev-guest/vlek", 0777)
+	os.Mkdir(dir+"/keys/public", 0777)
+	os.Mkdir(dir+"/keys/public/vcek", 0777)
+	os.Mkdir(dir+"/keys/public/vlek", 0777)
+	os.Mkdir(dir+"/keys/private", 0777)
+	os.Mkdir(dir+"/keys/private/vcek", 0777)
+	os.Mkdir(dir+"/keys/private/vlek", 0777)
 
 	arkCert, arkKey := generateARK()
 
